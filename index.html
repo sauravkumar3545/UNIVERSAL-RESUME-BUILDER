@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ResumeBuilder - Universal Resume Builder & Independent ATS Checker</title>
+  
+  <!-- Google Fonts: Inter & Plus Jakarta Sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Font Awesome 6 Icons CDN -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+  
+  <!-- PDF.js CDN for Client-Side PDF Text Extraction -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
+
+  <!-- Mammoth.js CDN for Client-Side DOCX Text Extraction -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+
+  <!-- html2canvas CDN for High-Resolution Image Processing -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+  <!-- html2pdf.js CDN for Direct Client-Side PDF Generation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+</head>
+<body>
+  <!-- NAVBAR -->
+  <nav class="navbar">
+    <div class="nav-container">
+      <div class="nav-brand">
+        <div class="brand-icon">
+          <i class="fa-solid fa-file-invoice"></i>
+        </div>
+        <span class="brand-name">ResumeBuilder</span>
+        <span class="brand-tag">PRO</span>
+      </div>
+
+      <div class="nav-center">
+        <div class="save-status" id="save-status" style="display:none;">
+          <i class="fa-solid fa-cloud-check"></i> <span id="save-status-text">Saved automatically</span>
+        </div>
+      </div>
+
+      <div class="nav-actions">
+        <button type="button" class="btn btn-sm btn-accent" onclick="openATSChecker()" title="Analyze Resume ATS Compatibility">
+          <i class="fa-solid fa-magnifying-glass-chart"></i> Check ATS Score
+        </button>
+        <button type="button" class="btn btn-sm btn-secondary" onclick="newResumeState()" title="Start New Blank Resume">
+          <i class="fa-solid fa-file-circle-plus"></i> New
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-danger" onclick="confirmClearAll()" title="Reset Resume Data">
+          <i class="fa-solid fa-rotate-left"></i> Reset
+        </button>
+        <button type="button" class="btn btn-sm btn-primary" onclick="downloadPDF()" title="Download PDF Resume">
+          <i class="fa-solid fa-file-arrow-down"></i> Download Resume
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- HERO / LEVEL SELECTION HEADER BANNER -->
+  <header class="hero-header">
+    <div class="hero-container">
+      <div class="hero-badge">
+        <i class="fa-solid fa-wand-magic-sparkles"></i> <span>Universal Resume Builder & Standalone ATS Checker</span>
+      </div>
+      <h1 class="hero-title">Build & Check Your Resume for ATS Readiness</h1>
+      <p class="hero-subtitle">Create your resume or upload any existing PDF, DOCX, or TXT file to analyze ATS compatibility.</p>
+      
+      <!-- Resume Level Selector -->
+      <div class="level-selector-card">
+        <label for="resume-level" class="level-label">
+          <i class="fa-solid fa-layer-group"></i> Resume Experience Level:
+        </label>
+        <select id="resume-level" class="level-select" onchange="handleLevelChange()">
+          <option value="Fresher / Beginner">🌱 Fresher / Beginner</option>
+          <option value="Internship Ready">🚀 Internship Ready</option>
+          <option value="Placement Ready" selected>🎯 Placement Ready</option>
+          <option value="Experienced">💼 Experienced Professional</option>
+        </select>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN WORKSPACE (TWO-COLUMN LAYOUT) -->
+  <main class="workspace">
+    <div class="workspace-container">
+      
+      <!-- LEFT COLUMN: BUILDER FORM (45%) -->
+      <section class="builder-column">
+        
+        <!-- PERSONAL INFORMATION SECTION -->
+        <div class="card form-card">
+          <div class="card-header">
+            <div class="card-header-title">
+              <i class="fa-solid fa-user-gear"></i>
+              <h2>Personal Information</h2>
+            </div>
+            <span class="badge badge-required">Name & Email Required</span>
+          </div>
+          <div class="card-body">
+            <div class="form-grid">
+              <div class="form-group full-width">
+                <label for="p-name">Full Name <span class="req">*</span></label>
+                <input type="text" id="p-name" class="form-control" placeholder="e.g. SUMIT KUMAR" required>
+                <span class="error-msg" id="err-p-name"></span>
+              </div>
+
+              <div class="form-group full-width">
+                <label for="p-title">Professional Title / Target Role</label>
+                <input type="text" id="p-title" class="form-control" placeholder="e.g. Data Analyst & B.Tech Computer Science Student">
+              </div>
+
+              <div class="form-group">
+                <label for="p-email">Email Address <span class="req">*</span></label>
+                <input type="email" id="p-email" class="form-control" placeholder="kumarsumitbgs2@gmail.com" required>
+                <span class="error-msg" id="err-p-email"></span>
+              </div>
+
+              <div class="form-group">
+                <label for="p-phone">Phone Number</label>
+                <input type="tel" id="p-phone" class="form-control" placeholder="+91 8409001903">
+                <span class="error-msg" id="err-p-phone"></span>
+              </div>
+
+              <div class="form-group full-width">
+                <label for="p-location">Location (City, Country)</label>
+                <input type="text" id="p-location" class="form-control" placeholder="e.g. Remote, India or New Delhi, India">
+              </div>
+
+              <div class="form-group">
+                <label for="p-linkedin"><i class="fa-brands fa-linkedin"></i> LinkedIn Label / URL</label>
+                <input type="text" id="p-linkedin" class="form-control" placeholder="https://linkedin.com/in/sumitkumar">
+              </div>
+
+              <div class="form-group">
+                <label for="p-github"><i class="fa-brands fa-github"></i> GitHub Label / URL</label>
+                <input type="text" id="p-github" class="form-control" placeholder="https://github.com/sumitkumar">
+              </div>
+
+              <div class="form-group full-width">
+                <label for="p-portfolio"><i class="fa-solid fa-globe"></i> Portfolio Label / URL</label>
+                <input type="text" id="p-portfolio" class="form-control" placeholder="https://sumitkumar.dev">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PROFESSIONAL SUMMARY SECTION -->
+        <div class="card form-card">
+          <div class="card-header">
+            <div class="card-header-title">
+              <i class="fa-solid fa-align-left"></i>
+              <h2>Professional Summary</h2>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="form-group full-width">
+              <label for="summary-text">Summary / Career Objective</label>
+              <textarea id="summary-text" class="form-control" rows="4" placeholder="Write a concise overview of your background, key strengths, and achievements..."></textarea>
+            </div>
+          </div>
+        </div>
+
+        <!-- TECHNICAL SKILLS SECTION -->
+        <div class="card form-card">
+          <div class="card-header">
+            <div class="card-header-title">
+              <i class="fa-solid fa-screwdriver-wrench"></i>
+              <h2>Technical Skills</h2>
+            </div>
+            <button type="button" class="btn btn-sm btn-secondary" onclick="addSkillCategory()">
+              <i class="fa-solid fa-plus"></i> Add Skill Category
+            </button>
+          </div>
+          <div class="card-body">
+            <p class="section-hint">Organize skills into categories (e.g., Data Analytics, Data Analysis, Databases & Tools, Programming, CS Fundamentals).</p>
+            <div id="skills-list" class="dynamic-list"></div>
+          </div>
+        </div>
+
+        <!-- EXPERIENCE SECTION -->
+        <div class="card form-card">
+          <div class="card-header">
+            <div class="card-header-title">
+              <i class="fa-solid fa-briefcase"></i>
+              <h2>Work Experience / Internships</h2>
+            </div>
+            <button type="button" class="btn btn-sm btn-secondary" onclick="addExperience()">
+              <i class="fa-solid fa-plus"></i> Add Experience
+            </button>
+          </div>
+          <div class="card-body">
+            <p class="section-hint">Add bullet points on separate lines (e.g. • Cleaned datasets using Excel...).</p>
+            <div id="experience-list" class="dynamic-list"></div>
+          </div>
+        </div>
+
+        <!-- PROJECTS SECTION -->
+        <div class="card form-card">
+          <div class="card-header">
+            <div class="card-header-title">
+              <i class="fa-solid fa-diagram-project"></i>
+              <h2>Projects</h2>
+            </div>
+            <button type="button" class="btn btn-sm btn-secondary" onclick="addProject()">
+              <i class="fa-solid fa-plus"></i> Add Project
+            </button>
+          </div>
+          <div class="card-body">
+            <p class="section-hint">Enter tech stacks (e.g. Excel | SQL | Python | Power BI) and bullet points on separate lines.</p>
+            <div id="projects-list" class="dynamic-list"></div>
+          </div>
+        </div>
+
+        <!-- EDUCATION SECTION -->
+        <div class="card form-card">
+          <div class="card-header">
+            <div class="card-header-title">
+              <i class="fa-solid fa-graduation-cap"></i>
+              <h2>Education</h2>
+            </div>
+            <button type="button" class="btn btn-sm btn-secondary" onclick="addEducation()">
+              <i class="fa-solid fa-plus"></i> Add Education
+            </button>
+          </div>
+          <div class="card-body">
+            <div id="education-list" class="dynamic-list"></div>
+          </div>
+        </div>
+
+        <!-- CERTIFICATIONS SECTION -->
+        <div class="card form-card">
+          <div class="card-header">
+            <div class="card-header-title">
+              <i class="fa-solid fa-certificate"></i>
+              <h2>Certifications</h2>
+            </div>
+            <button type="button" class="btn btn-sm btn-secondary" onclick="addCertificate()">
+              <i class="fa-solid fa-plus"></i> Add Certification
+            </button>
+          </div>
+          <div class="card-body">
+            <div id="certifications-list" class="dynamic-list"></div>
+          </div>
+        </div>
+
+        <!-- ACHIEVEMENTS SECTION -->
+        <div class="card form-card">
+          <div class="card-header">
+            <div class="card-header-title">
+              <i class="fa-solid fa-trophy"></i>
+              <h2>Achievements</h2>
+            </div>
+            <button type="button" class="btn btn-sm btn-secondary" onclick="addAchievement()">
+              <i class="fa-solid fa-plus"></i> Add Achievement
+            </button>
+          </div>
+          <div class="card-body">
+            <div id="achievements-list" class="dynamic-list"></div>
+          </div>
+        </div>
+
+        <!-- ACTIVITIES & RESPONSIBILITIES SECTION -->
+        <div class="card form-card">
+          <div class="card-header">
+            <div class="card-header-title">
+              <i class="fa-solid fa-users-gear"></i>
+              <h2>Positions of Responsibility & Activities</h2>
+            </div>
+            <button type="button" class="btn btn-sm btn-secondary" onclick="addActivity()">
+              <i class="fa-solid fa-plus"></i> Add Activity
+            </button>
+          </div>
+          <div class="card-body">
+            <div id="activities-list" class="dynamic-list"></div>
+          </div>
+        </div>
+
+        <!-- RELEVANT COURSEWORK SECTION -->
+        <div class="card form-card">
+          <div class="card-header">
+            <div class="card-header-title">
+              <i class="fa-solid fa-book-open"></i>
+              <h2>Relevant Coursework</h2>
+            </div>
+            <button type="button" class="btn btn-sm btn-secondary" onclick="addCoursework()">
+              <i class="fa-solid fa-plus"></i> Add Coursework
+            </button>
+          </div>
+          <div class="card-body">
+            <div id="coursework-list" class="dynamic-list"></div>
+          </div>
+        </div>
+
+        <!-- LANGUAGES SECTION -->
+        <div class="card form-card">
+          <div class="card-header">
+            <div class="card-header-title">
+              <i class="fa-solid fa-language"></i>
+              <h2>Languages</h2>
+            </div>
+            <button type="button" class="btn btn-sm btn-secondary" onclick="addLanguage()">
+              <i class="fa-solid fa-plus"></i> Add Language
+            </button>
+          </div>
+          <div class="card-body">
+            <div id="languages-list" class="dynamic-list"></div>
+          </div>
+        </div>
+
+        <!-- INTERESTS SECTION -->
+        <div class="card form-card">
+          <div class="card-header">
+            <div class="card-header-title">
+              <i class="fa-solid fa-heart"></i>
+              <h2>Interests</h2>
+            </div>
+            <button type="button" class="btn btn-sm btn-secondary" onclick="addInterest()">
+              <i class="fa-solid fa-plus"></i> Add Interest
+            </button>
+          </div>
+          <div class="card-body">
+            <div id="interests-list" class="dynamic-list"></div>
+          </div>
+        </div>
+
+        <!-- CUSTOM SECTIONS -->
+        <div class="card form-card">
+          <div class="card-header">
+            <div class="card-header-title">
+              <i class="fa-solid fa-folder-plus"></i>
+              <h2>Custom Sections</h2>
+            </div>
+            <button type="button" class="btn btn-sm btn-secondary" onclick="addCustomSection()">
+              <i class="fa-solid fa-plus"></i> Add Custom Section
+            </button>
+          </div>
+          <div class="card-body">
+            <div id="custom-list" class="dynamic-list"></div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- RIGHT COLUMN: LIVE RESUME PREVIEW (55%) -->
+      <section class="preview-column" id="preview-section">
+        <div class="preview-sticky-wrapper">
+          <div class="preview-toolbar">
+            <div class="toolbar-title">
+              <i class="fa-solid fa-eye"></i> <span>Live Resume Preview</span>
+            </div>
+            <div class="toolbar-actions">
+              <button type="button" class="btn btn-sm btn-accent" onclick="openATSChecker()">
+                <i class="fa-solid fa-magnifying-glass-chart"></i> Check ATS
+              </button>
+              <button type="button" class="btn btn-sm btn-primary" onclick="downloadPDF()">
+                <i class="fa-solid fa-file-arrow-down"></i> Download Resume
+              </button>
+            </div>
+          </div>
+
+          <!-- THE PREVIEW PAPER SHEET (A4 Aspect Ratio Container) -->
+          <div class="paper-container">
+            <div id="resume-preview" class="resume-paper">
+              <!-- Rendered dynamically by script.js -->
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- BOTTOM DOWNLOAD SECTION -->
+  <section class="ready-section">
+    <div class="ready-container">
+      <div class="ready-content">
+        <h2>Your Resume is Ready!</h2>
+        <p>Check ATS compatibility or download your professional resume in PDF format.</p>
+      </div>
+      <div class="ready-buttons">
+        <button type="button" class="btn btn-lg btn-accent" onclick="openATSChecker()">
+          <i class="fa-solid fa-magnifying-glass-chart"></i> Check ATS Score
+        </button>
+        <button type="button" class="btn btn-lg btn-primary" onclick="downloadPDF()">
+          <i class="fa-solid fa-file-arrow-down"></i> Download Resume
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- CLEAR ALL CONFIRMATION MODAL -->
+  <div class="modal-backdrop" id="clear-modal">
+    <div class="modal-card">
+      <div class="modal-icon warning-icon">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+      </div>
+      <h3 class="modal-title">Clear All Resume Data?</h3>
+      <p class="modal-text">Are you sure you want to clear your resume? This will erase all form inputs, dynamic sections, and saved data from your browser storage.</p>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" onclick="closeClearModal()">Cancel</button>
+        <button type="button" class="btn btn-danger" onclick="executeClearAll()">Yes, Clear Resume</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- STANDALONE ATS CHECKER ENTRY SELECTION MODAL -->
+  <div class="modal-backdrop" id="ats-entry-modal">
+    <div class="modal-card ats-entry-card">
+      <div class="ats-modal-header">
+        <div class="ats-modal-title">
+          <i class="fa-solid fa-magnifying-glass-chart"></i>
+          <h3>Check Your Resume ATS Score</h3>
+        </div>
+        <button type="button" class="btn-icon-close" onclick="closeATSEntryModal()">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="ats-entry-body">
+        <p class="ats-entry-sub">Analyze your resume for ATS readiness, content quality, keywords, structure and common issues.</p>
+        
+        <div class="ats-entry-grid">
+          
+          <!-- OPTION 1: UPLOAD EXTERNAL RESUME -->
+          <div class="ats-option-card">
+            <div class="option-icon">
+              <i class="fa-solid fa-cloud-arrow-up"></i>
+            </div>
+            <h4>Option 1: Upload Resume</h4>
+            <p>Upload a resume created anywhere (PDF, DOCX, or TXT) and analyze it here.</p>
+
+            <!-- Drag & Drop Zone -->
+            <div class="upload-zone" id="upload-drop-zone" onclick="triggerFileInput()">
+              <i class="fa-solid fa-file-pdf"></i>
+              <div class="upload-title"><strong>Drag & Drop Your Resume</strong></div>
+              <div class="upload-hint">or click to browse files (PDF, DOCX, TXT)</div>
+              <input type="file" id="resume-file-input" accept=".pdf,.docx,.txt" style="display:none;" onchange="handleFileSelect(event)">
+            </div>
+
+            <!-- Selected File Details Card -->
+            <div class="file-details-card" id="file-details-card" style="display:none;">
+              <div class="file-info-col">
+                <i class="fa-solid fa-file-lines file-icon"></i>
+                <div>
+                  <div class="file-name" id="file-name-text">resume.pdf</div>
+                  <div class="file-size" id="file-size-text">120 KB</div>
+                </div>
+              </div>
+              <button type="button" class="btn-icon-delete" onclick="clearSelectedFile()" title="Remove file">
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+
+            <span class="error-msg" id="err-file-upload" style="display:block; margin-top:0.5rem;"></span>
+
+            <button type="button" class="btn btn-accent btn-full" id="btn-analyze-upload" onclick="analyzeUploadedResumeFile()" disabled>
+              <i class="fa-solid fa-microscope"></i> Analyze Uploaded Resume
+            </button>
+          </div>
+
+          <!-- OPTION 2: ANALYZE CURRENT BUILDER RESUME -->
+          <div class="ats-option-card">
+            <div class="option-icon">
+              <i class="fa-solid fa-sliders"></i>
+            </div>
+            <h4>Option 2: Analyze Current Resume</h4>
+            <p>Analyze the resume currently created inside the Resume Builder workspace.</p>
+            <div class="option-info-box">
+              <i class="fa-solid fa-circle-check" style="color:#10b981;"></i> Analyzes all active sections (Summary, Skills, Experience, Projects, Education, Certs).
+            </div>
+            <button type="button" class="btn btn-primary btn-full" onclick="analyzeCurrentBuilderResume()">
+              <i class="fa-solid fa-chart-line"></i> Analyze Active Builder Resume
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ATS RESUME ANALYZER RESULTS MODAL -->
+  <div class="modal-backdrop" id="ats-results-modal">
+    <div class="modal-card ats-modal-card">
+      <div class="ats-modal-header">
+        <div class="ats-modal-title">
+          <i class="fa-solid fa-chart-pie"></i>
+          <h3>ATS Compatibility Results</h3>
+        </div>
+        <button type="button" class="btn-icon-close" onclick="closeATSResultsModal()">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="ats-modal-body" id="ats-results-body">
+        <!-- Rendered dynamically by script.js -->
+      </div>
+
+      <div class="ats-modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeATSResultsModal()">Close Analyzer</button>
+        <button type="button" class="btn btn-accent" onclick="recheckATSScore()">
+          <i class="fa-solid fa-rotate"></i> Recheck ATS Score
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="footer-container">
+      <p>© 2026 ResumeBuilder. Universal, ATS-optimized, 100% private client-side resume generator & independent checker.</p>
+    </div>
+  </footer>
+
+  <!-- Script File -->
+  <script src="script.js"></script>
+</body>
+</html>
