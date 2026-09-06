@@ -28,6 +28,9 @@
 
   <!-- html2pdf.js CDN for Direct Client-Side PDF Generation -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+  <!-- Tesseract.js CDN for Client-Side Payment Screenshot OCR Analysis -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 </head>
 <body>
   <!-- NAVBAR -->
@@ -49,7 +52,7 @@
 
       <div class="nav-actions">
         <button type="button" class="btn btn-sm btn-accent" onclick="openATSChecker()" title="Analyze Resume ATS Compatibility">
-          <i class="fa-solid fa-magnifying-glass-chart"></i> Check ATS Score
+          <i class="fa-solid fa-bullseye"></i> Check ATS Score
         </button>
         <button type="button" class="btn btn-sm btn-secondary" onclick="newResumeState()" title="Start New Blank Resume">
           <i class="fa-solid fa-file-circle-plus"></i> New
@@ -57,7 +60,7 @@
         <button type="button" class="btn btn-sm btn-outline-danger" onclick="confirmClearAll()" title="Reset Resume Data">
           <i class="fa-solid fa-rotate-left"></i> Reset
         </button>
-        <button type="button" class="btn btn-sm btn-primary" onclick="downloadPDF()" title="Download PDF Resume">
+        <button type="button" class="btn btn-sm btn-primary" onclick="openDownloadAccessModal()" title="Download Resume">
           <i class="fa-solid fa-file-arrow-down"></i> Download Resume
         </button>
       </div>
@@ -95,6 +98,26 @@
       <!-- LEFT COLUMN: BUILDER FORM (45%) -->
       <section class="builder-column">
         
+        <!-- STRICT ONE-PAGE CAPACITY STATUS BANNER -->
+        <div id="page-capacity-banner" class="page-capacity-banner fit" style="display: none;">
+          <div class="capacity-banner-main">
+            <div class="capacity-banner-icon">
+              <i id="capacity-banner-icon-i" class="fa-solid fa-circle-check"></i>
+            </div>
+            <div class="capacity-banner-text">
+              <div class="capacity-banner-title" id="capacity-banner-title">One-Page Capacity: Optimal (0% used)</div>
+              <div class="capacity-banner-desc" id="capacity-banner-desc">Your resume fits cleanly on one standard A4 page.</div>
+            </div>
+          </div>
+          <div class="capacity-banner-progress-wrap">
+            <div class="capacity-banner-progress-bar">
+              <div id="capacity-banner-progress-fill" class="capacity-banner-progress-fill fit" style="width: 0%;"></div>
+            </div>
+            <span id="capacity-banner-pct" class="capacity-banner-pct">0%</span>
+          </div>
+          <div id="capacity-banner-largest" class="capacity-banner-largest" style="display: none;"></div>
+        </div>
+
         <!-- PERSONAL INFORMATION SECTION -->
         <div class="card form-card">
           <div class="card-header">
@@ -108,45 +131,45 @@
             <div class="form-grid">
               <div class="form-group full-width">
                 <label for="p-name">Full Name <span class="req">*</span></label>
-                <input type="text" id="p-name" class="form-control" placeholder="e.g. SUMIT KUMAR" required>
+                <input type="text" id="p-name" class="form-control" placeholder="e.g. SAURAV KUMAR" required>
                 <span class="error-msg" id="err-p-name"></span>
               </div>
 
               <div class="form-group full-width">
                 <label for="p-title">Professional Title / Target Role</label>
-                <input type="text" id="p-title" class="form-control" placeholder="e.g. Data Analyst & B.Tech Computer Science Student">
+                <input type="text" id="p-title" class="form-control" placeholder="e.g. Data Analyst | AI/ML Enthusiast | Full Stack Developer">
               </div>
 
               <div class="form-group">
                 <label for="p-email">Email Address <span class="req">*</span></label>
-                <input type="email" id="p-email" class="form-control" placeholder="kumarsumitbgs2@gmail.com" required>
+                <input type="email" id="p-email" class="form-control" placeholder="saurav.kumar.dev@gmail.com" required>
                 <span class="error-msg" id="err-p-email"></span>
               </div>
 
               <div class="form-group">
                 <label for="p-phone">Phone Number</label>
-                <input type="tel" id="p-phone" class="form-control" placeholder="+91 8409001903">
+                <input type="tel" id="p-phone" class="form-control" placeholder="+91 62079 11534">
                 <span class="error-msg" id="err-p-phone"></span>
               </div>
 
               <div class="form-group full-width">
                 <label for="p-location">Location (City, Country)</label>
-                <input type="text" id="p-location" class="form-control" placeholder="e.g. Remote, India or New Delhi, India">
+                <input type="text" id="p-location" class="form-control" placeholder="e.g. Uttarakhand, India">
               </div>
 
               <div class="form-group">
                 <label for="p-linkedin"><i class="fa-brands fa-linkedin"></i> LinkedIn Label / URL</label>
-                <input type="text" id="p-linkedin" class="form-control" placeholder="https://linkedin.com/in/sumitkumar">
+                <input type="text" id="p-linkedin" class="form-control" placeholder="https://linkedin.com/in/saurav-kumar-dev">
               </div>
 
               <div class="form-group">
                 <label for="p-github"><i class="fa-brands fa-github"></i> GitHub Label / URL</label>
-                <input type="text" id="p-github" class="form-control" placeholder="https://github.com/sumitkumar">
+                <input type="text" id="p-github" class="form-control" placeholder="https://github.com/sauravkumar3545">
               </div>
 
               <div class="form-group full-width">
                 <label for="p-portfolio"><i class="fa-solid fa-globe"></i> Portfolio Label / URL</label>
-                <input type="text" id="p-portfolio" class="form-control" placeholder="https://sumitkumar.dev">
+                <input type="text" id="p-portfolio" class="form-control" placeholder="https://sauravkumar.dev">
               </div>
             </div>
           </div>
@@ -355,12 +378,15 @@
           <div class="preview-toolbar">
             <div class="toolbar-title">
               <i class="fa-solid fa-eye"></i> <span>Live Resume Preview</span>
+              <span id="toolbar-page-badge" class="toolbar-page-badge fit">
+                <i class="fa-solid fa-file"></i> <span>1 Page A4 (0%)</span>
+              </span>
             </div>
             <div class="toolbar-actions">
               <button type="button" class="btn btn-sm btn-accent" onclick="openATSChecker()">
                 <i class="fa-solid fa-magnifying-glass-chart"></i> Check ATS
               </button>
-              <button type="button" class="btn btn-sm btn-primary" onclick="downloadPDF()">
+              <button type="button" class="btn btn-sm btn-primary" onclick="openDownloadAccessModal()">
                 <i class="fa-solid fa-file-arrow-down"></i> Download Resume
               </button>
             </div>
@@ -387,9 +413,9 @@
       </div>
       <div class="ready-buttons">
         <button type="button" class="btn btn-lg btn-accent" onclick="openATSChecker()">
-          <i class="fa-solid fa-magnifying-glass-chart"></i> Check ATS Score
+          <i class="fa-solid fa-bullseye"></i> Check ATS Score
         </button>
-        <button type="button" class="btn btn-lg btn-primary" onclick="downloadPDF()">
+        <button type="button" class="btn btn-lg btn-primary" onclick="openDownloadAccessModal()">
           <i class="fa-solid fa-file-arrow-down"></i> Download Resume
         </button>
       </div>
@@ -411,113 +437,576 @@
     </div>
   </div>
 
-  <!-- STANDALONE ATS CHECKER ENTRY SELECTION MODAL -->
-  <div class="modal-backdrop" id="ats-entry-modal">
-    <div class="modal-card ats-entry-card">
-      <div class="ats-modal-header">
-        <div class="ats-modal-title">
-          <i class="fa-solid fa-magnifying-glass-chart"></i>
-          <h3>Check Your Resume ATS Score</h3>
+
+  <!-- DOWNLOAD ACCESS MODAL -->
+  <div class="modal-backdrop" id="download-access-modal">
+    <div class="modal-card download-access-card">
+      <div class="access-modal-header">
+        <div class="access-modal-title">
+          <i class="fa-solid fa-lock"></i>
+          <h3>Download Access</h3>
         </div>
-        <button type="button" class="btn-icon-close" onclick="closeATSEntryModal()">
+        <button type="button" class="btn-icon-close" onclick="closeDownloadAccessModal()" aria-label="Close modal">
           <i class="fa-solid fa-xmark"></i>
         </button>
       </div>
 
-      <div class="ats-entry-body">
-        <p class="ats-entry-sub">Analyze your resume for ATS readiness, content quality, keywords, structure and common issues.</p>
-        
-        <div class="ats-entry-grid">
-          
-          <!-- OPTION 1: UPLOAD EXTERNAL RESUME -->
-          <div class="ats-option-card">
-            <div class="option-icon">
-              <i class="fa-solid fa-cloud-arrow-up"></i>
-            </div>
-            <h4>Option 1: Upload Resume</h4>
-            <p>Upload a resume created anywhere (PDF, DOCX, or TXT) and analyze it here.</p>
+      <p class="access-modal-sub">Choose your preferred access option to unlock and download your high-resolution resume.</p>
 
-            <!-- Drag & Drop Zone -->
-            <div class="upload-zone" id="upload-drop-zone" onclick="triggerFileInput()">
-              <i class="fa-solid fa-file-pdf"></i>
-              <div class="upload-title"><strong>Drag & Drop Your Resume</strong></div>
-              <div class="upload-hint">or click to browse files (PDF, DOCX, TXT)</div>
-              <input type="file" id="resume-file-input" accept=".pdf,.docx,.txt" style="display:none;" onchange="handleFileSelect(event)">
-            </div>
+      <div class="access-grid">
+        <!-- OPTION A: PASSWORD ACCESS -->
+        <div class="access-option-card">
+          <div class="access-badge">Option A</div>
+          <h4>Download with Password</h4>
+          <p class="access-desc">Enter authorization password to immediately unlock full high-resolution resume downloads.</p>
 
-            <!-- Selected File Details Card -->
-            <div class="file-details-card" id="file-details-card" style="display:none;">
-              <div class="file-info-col">
-                <i class="fa-solid fa-file-lines file-icon"></i>
-                <div>
-                  <div class="file-name" id="file-name-text">resume.pdf</div>
-                  <div class="file-size" id="file-size-text">120 KB</div>
-                </div>
-              </div>
-              <button type="button" class="btn-icon-delete" onclick="clearSelectedFile()" title="Remove file">
-                <i class="fa-solid fa-xmark"></i>
+          <div class="password-form-group">
+            <label for="access-password-input" class="access-input-label">Enter Password</label>
+            <div class="password-input-wrapper">
+              <i class="fa-solid fa-key pwd-icon"></i>
+              <input type="password" id="access-password-input" class="form-control" placeholder="Enter Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')handlePasswordUnlock()">
+              <button type="button" class="pwd-eye-btn" onclick="togglePasswordVisibility('access-password-input', 'pwd-toggle-icon')" title="Show / Hide Password">
+                <i class="fa-regular fa-eye" id="pwd-toggle-icon"></i>
               </button>
             </div>
-
-            <span class="error-msg" id="err-file-upload" style="display:block; margin-top:0.5rem;"></span>
-
-            <button type="button" class="btn btn-accent btn-full" id="btn-analyze-upload" onclick="analyzeUploadedResumeFile()" disabled>
-              <i class="fa-solid fa-microscope"></i> Analyze Uploaded Resume
-            </button>
+            <div class="access-error-box" id="password-error-msg" style="display:none;">
+              <i class="fa-solid fa-circle-exclamation"></i> <span>Incorrect password. Please try again.</span>
+            </div>
           </div>
 
-          <!-- OPTION 2: ANALYZE CURRENT BUILDER RESUME -->
-          <div class="ats-option-card">
-            <div class="option-icon">
-              <i class="fa-solid fa-sliders"></i>
-            </div>
-            <h4>Option 2: Analyze Current Resume</h4>
-            <p>Analyze the resume currently created inside the Resume Builder workspace.</p>
-            <div class="option-info-box">
-              <i class="fa-solid fa-circle-check" style="color:#10b981;"></i> Analyzes all active sections (Summary, Skills, Experience, Projects, Education, Certs).
-            </div>
-            <button type="button" class="btn btn-primary btn-full" onclick="analyzeCurrentBuilderResume()">
-              <i class="fa-solid fa-chart-line"></i> Analyze Active Builder Resume
-            </button>
+          <button type="button" class="btn btn-secondary btn-full" onclick="handlePasswordUnlock()">
+            <i class="fa-solid fa-unlock"></i> Unlock & Download
+          </button>
+        </div>
+
+        <!-- OPTION B: PAID ACCESS (₹11) -->
+        <div class="access-option-card access-card-accent">
+          <div class="access-badge badge-paid">Option B</div>
+          <div class="access-price-row">
+            <span class="access-price-label">Amount:</span>
+            <span class="access-price-amount">₹11</span>
+          </div>
+          <h4>Pay ₹11 & Download</h4>
+          <p class="access-desc">Scan the UPI QR code to complete the ₹11 payment and download your resume in crisp PDF, PNG, or JPG formats.</p>
+
+          <div class="access-features-list">
+            <div class="feature-item"><i class="fa-solid fa-circle-check"></i> 100% Crisp Vector & High-Res Export</div>
+            <div class="feature-item"><i class="fa-solid fa-circle-check"></i> Standard A4 Proportions (No Clipping)</div>
+            <div class="feature-item"><i class="fa-solid fa-circle-check"></i> Direct PDF, PNG & JPG Downloads</div>
           </div>
 
+          <button type="button" class="btn btn-primary btn-full" onclick="openPaymentModal()">
+            <i class="fa-solid fa-qrcode"></i> Pay ₹11 & Download
+          </button>
         </div>
       </div>
+
+      <!-- UNLOCKED DOWNLOAD BAR (VISIBLE UPON SUCCESSFUL PASSWORD UNLOCK) -->
+      <div id="password-unlocked-section" class="unlocked-download-section" style="display:none;">
+        <div class="unlocked-banner">
+          <i class="fa-solid fa-circle-check"></i>
+          <div>
+            <strong>Access Granted!</strong>
+            <p>Select your preferred format to download your resume:</p>
+          </div>
+        </div>
+        <div class="format-buttons-row">
+          <button type="button" class="btn btn-primary" onclick="downloadResume('pdf')">
+            <i class="fa-solid fa-file-pdf"></i> Download PDF
+          </button>
+          <button type="button" class="btn btn-secondary" onclick="downloadResume('png')">
+            <i class="fa-solid fa-file-image"></i> Download PNG
+          </button>
+          <button type="button" class="btn btn-secondary" onclick="downloadResume('jpg')">
+            <i class="fa-solid fa-file-image"></i> Download JPG
+          </button>
+        </div>
+      </div>
+
     </div>
   </div>
 
-  <!-- ATS RESUME ANALYZER RESULTS MODAL -->
-  <div class="modal-backdrop" id="ats-results-modal">
-    <div class="modal-card ats-modal-card">
-      <div class="ats-modal-header">
-        <div class="ats-modal-title">
-          <i class="fa-solid fa-chart-pie"></i>
-          <h3>ATS Compatibility Results</h3>
+  <!-- PROFESSIONAL SECURE UPI PAYMENT MODAL -->
+  <div class="modal-backdrop" id="payment-modal">
+    <div class="modal-card payment-modal-card">
+      <div class="payment-modal-header">
+        <div class="payment-modal-title">
+          <i class="fa-solid fa-shield-halved"></i>
+          <h3>Secure UPI Payment & Download</h3>
         </div>
-        <button type="button" class="btn-icon-close" onclick="closeATSResultsModal()">
+        <button type="button" class="btn-icon-close" onclick="closePaymentModal()" aria-label="Close modal">
           <i class="fa-solid fa-xmark"></i>
         </button>
       </div>
 
-      <div class="ats-modal-body" id="ats-results-body">
-        <!-- Rendered dynamically by script.js -->
-      </div>
+      <div class="payment-modal-body">
+        
+        <!-- STEP 1: PAYMENT AMOUNT & QR DISPLAY -->
+        <div class="payment-qr-card">
+          <div class="payment-badge-row">
+            <span class="payment-badge-tag"><i class="fa-solid fa-indian-rupee-sign"></i> Pre-filled UPI QR</span>
+            <span class="payment-badge-amount">Amount: ₹11</span>
+          </div>
 
-      <div class="ats-modal-footer">
-        <button type="button" class="btn btn-secondary" onclick="closeATSResultsModal()">Close Analyzer</button>
-        <button type="button" class="btn btn-accent" onclick="recheckATSScore()">
-          <i class="fa-solid fa-rotate"></i> Recheck ATS Score
+          <p class="qr-heading-prompt"><strong>Scan the QR and pay exactly ₹11 to SULEKHA DEVI.</strong></p>
+
+          <div class="qr-container">
+            <img src="assets/upi-qr-11.png" alt="UPI ₹11 Payment QR Code - SULEKHA DEVI" class="payment-qr-image" id="payment-qr-image">
+          </div>
+
+          <div class="payment-receiver-details">
+            <div class="receiver-row">
+              <span class="receiver-label"><i class="fa-solid fa-user-check"></i> Payee:</span>
+              <span class="receiver-value">SULEKHA DEVI</span>
+            </div>
+            <div class="receiver-row">
+              <span class="receiver-label"><i class="fa-solid fa-at"></i> UPI ID:</span>
+              <span class="receiver-value" style="font-family: monospace;">6207911534@ibl <button type="button" class="btn-copy-upi" onclick="copyUPIId()" title="Copy UPI ID"><i class="fa-regular fa-copy" id="copy-upi-icon"></i></button></span>
+            </div>
+            <div class="receiver-row">
+              <span class="receiver-label"><i class="fa-solid fa-tag"></i> Fixed Amount:</span>
+              <span class="receiver-value" style="color: var(--primary-color);">₹11.00 (Pre-filled)</span>
+            </div>
+            <div class="receiver-row">
+              <span class="receiver-label"><i class="fa-solid fa-wallet"></i> Apps:</span>
+              <span class="receiver-value">GPay, PhonePe, Paytm, BHIM</span>
+            </div>
+          </div>
+
+          <a href="upi://pay?pa=6207911534@ibl&pn=SULEKHA%20DEVI&mc=0000&mode=02&purpose=00&am=11.00&cu=INR&tn=Resume%20Download" class="btn btn-sm btn-primary mobile-pay-btn" id="btn-upi-deeplink">
+            <i class="fa-solid fa-mobile-screen-button"></i> Pay ₹11 Directly in UPI App
+          </a>
+        </div>
+
+        <!-- STEP 2: SCREENSHOT UPLOAD & PROOF VERIFICATION -->
+        <div class="payment-proof-card">
+          <div class="proof-card-header">
+            <h4><i class="fa-solid fa-receipt"></i> Upload Payment Screenshot</h4>
+            <span class="proof-format-hint">PNG, JPG, JPEG, WEBP (Max 10MB)</span>
+          </div>
+          <p class="proof-card-sub">Upload the confirmation screenshot from your payment app showing the ₹11 transaction and reference ID.</p>
+
+          <!-- Upload Drop Zone -->
+          <div class="screenshot-dropzone" id="screenshot-dropzone" onclick="triggerScreenshotPicker()">
+            <i class="fa-solid fa-cloud-arrow-up dropzone-cloud-icon"></i>
+            <div class="dropzone-main-text"><strong>Drag & Drop Payment Screenshot</strong></div>
+            <div class="dropzone-sub-text">or click to browse from device / any accessible folder</div>
+            <input type="file" id="payment-screenshot-input" accept="image/png,image/jpeg,image/jpg,image/webp" style="display:none;" onchange="handleScreenshotSelected(event)">
+          </div>
+
+          <!-- Screenshot Preview Card -->
+          <div class="screenshot-preview-box" id="screenshot-preview-box" style="display:none;">
+            <div class="preview-thumb-wrap">
+              <img id="screenshot-preview-img" src="" alt="Payment Proof Screenshot Preview">
+            </div>
+            <div class="preview-info-col">
+              <div class="preview-name" id="preview-file-name">screenshot.png</div>
+              <div class="preview-size" id="preview-file-size">1.2 MB</div>
+              <div class="preview-btn-group">
+                <button type="button" class="btn btn-xs btn-secondary" onclick="triggerScreenshotPicker()">
+                  <i class="fa-solid fa-arrows-rotate"></i> Replace
+                </button>
+                <button type="button" class="btn btn-xs btn-outline-danger" onclick="removeScreenshot()">
+                  <i class="fa-solid fa-trash"></i> Remove
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Verify Action Button -->
+          <div class="verify-btn-container">
+            <button type="button" class="btn btn-accent btn-full" id="btn-verify-proof" onclick="verifyPaymentSubmission()" disabled>
+              <i class="fa-solid fa-magnifying-glass-chart"></i> Verify Payment Proof
+            </button>
+          </div>
+
+          <!-- Multi-Signal Evidence Analysis Box -->
+          <div class="signals-analysis-box" id="signals-analysis-box" style="display:none;">
+            <div class="signals-box-title">
+              <i class="fa-solid fa-microchip"></i> Evidence & Signal Analysis
+            </div>
+            <div class="signals-grid">
+              <div class="signal-badge" id="sig-amt">
+                <i class="fa-solid fa-spinner fa-spin"></i> <span>Amount: ₹11 check</span>
+              </div>
+              <div class="signal-badge" id="sig-stat">
+                <i class="fa-solid fa-spinner fa-spin"></i> <span>Payment Status check</span>
+              </div>
+              <div class="signal-badge" id="sig-utr">
+                <i class="fa-solid fa-spinner fa-spin"></i> <span>Transaction / UTR ID check</span>
+              </div>
+              <div class="signal-badge" id="sig-payee">
+                <i class="fa-solid fa-spinner fa-spin"></i> <span>Payee match check</span>
+              </div>
+              <div class="signal-badge" id="sig-dup">
+                <i class="fa-solid fa-spinner fa-spin"></i> <span>Duplicate proof check</span>
+              </div>
+              <div class="signal-badge" id="sig-integ">
+                <i class="fa-solid fa-spinner fa-spin"></i> <span>Image integrity check</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- State Messages: Pending / Failed / Invalid Proof / Already Used -->
+          <div class="payment-state-banner" id="payment-state-banner" style="display:none;"></div>
+
+          <!-- SUCCESS STATE: PAYMENT VERIFIED -->
+          <div class="payment-verified-panel" id="payment-verified-panel" style="display:none;">
+            <div class="verified-badge-icon">
+              <i class="fa-solid fa-circle-check"></i>
+            </div>
+            <h3 class="verified-title">Payment Verified ✓</h3>
+            <p class="verified-sub">₹11 payment successfully verified.</p>
+            
+            <div class="verified-downloads">
+              <p class="verified-action-title">Download Resume:</p>
+              <div class="format-buttons-row">
+                <button type="button" class="btn btn-primary" onclick="downloadResume('pdf')">
+                  <i class="fa-solid fa-file-pdf"></i> Download PDF
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="downloadResume('png')">
+                  <i class="fa-solid fa-file-image"></i> Download PNG
+                </button>
+                <button type="button" class="btn btn-secondary" onclick="downloadResume('jpg')">
+                  <i class="fa-solid fa-file-image"></i> Download JPG
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Security & Production Architecture Note -->
+          <div class="payment-security-notice">
+            <div class="security-notice-header">
+              <i class="fa-solid fa-lock"></i>
+              <span>Production Verification & Privacy Assurance</span>
+            </div>
+            <p>Uploaded screenshots are analyzed strictly in memory and are never stored in browser storage or publicly accessible URLs. In production environments, payment gateway webhooks (Razorpay / UPI) and automated WhatsApp notifications confirm authenticity server-side.</p>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ONE-PAGE LIMIT REACHED MODAL (ADD CONTENT BLOCKED) -->
+  <div class="modal-backdrop" id="page-limit-modal">
+    <div class="modal-card page-limit-card">
+      <div class="modal-icon warning-icon">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+      </div>
+      <h3 class="modal-title" id="page-limit-modal-title">⚠️ One-Page Limit Reached</h3>
+      <p class="modal-text" id="page-limit-modal-msg">
+        There is not enough space to add another item. Your resume must fit strictly on exactly one A4 page.
+      </p>
+      <div class="page-limit-guidance" id="page-limit-guidance-box">
+        <div class="guidance-title"><strong>Recommended actions:</strong></div>
+        <ul class="guidance-list" id="page-limit-guidance-list">
+          <li>Shorten lengthy bullet points in Experience or Projects</li>
+          <li>Condense your Professional Summary</li>
+          <li>Remove less relevant entries or skills</li>
+        </ul>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-primary" onclick="closePageLimitModal()">
+          <i class="fa-solid fa-check"></i> Understood, I'll Shorten Content
         </button>
       </div>
     </div>
   </div>
+
+  <!-- ONE-PAGE DOWNLOAD BLOCKED MODAL -->
+  <div class="modal-backdrop" id="download-blocked-modal">
+    <div class="modal-card page-limit-card">
+      <div class="modal-icon danger-icon">
+        <i class="fa-solid fa-ban"></i>
+      </div>
+      <h3 class="modal-title">⚠️ Resume Cannot Be Downloaded Yet</h3>
+      <p class="modal-text">
+        Your resume content exceeds the strict <strong>one-page A4 limit</strong>. To maintain professional recruiter formatting and prevent second-page overflow, the resume must fit on one page.
+      </p>
+      <div class="page-limit-guidance" id="download-blocked-breakdown">
+        <div class="guidance-title"><strong>Largest sections to shorten:</strong></div>
+        <ul class="guidance-list" id="download-blocked-sections-list">
+          <!-- Filled dynamically by script.js -->
+        </ul>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-primary" onclick="closeDownloadBlockedModal()">
+          <i class="fa-solid fa-arrow-left"></i> Back to Editor
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONNECT WITH ME SECTION -->
+  <section class="connect-section" id="connect-section">
+    <div class="connect-container">
+      <div class="connect-header">
+        <div class="connect-badge">
+          <i class="fa-solid fa-paper-plane"></i>
+          <span>Get in Touch</span>
+        </div>
+        <h2 class="connect-title">Let's Connect</h2>
+        <p class="connect-subtitle">
+          Have a question, want to collaborate, or just want to connect? Feel free to reach out through any of the platforms below.
+        </p>
+        <div class="connect-credit">
+          Connect with <strong>Saurav Kumar</strong>
+        </div>
+      </div>
+
+      <div class="connect-grid">
+        <!-- 1. LinkedIn -->
+        <a href="https://www.linkedin.com/in/saurav-kumar-907940376"
+           target="_blank"
+           rel="noopener noreferrer"
+           class="connect-card connect-card-linkedin"
+           aria-label="Connect with Saurav Kumar on LinkedIn">
+          <div class="connect-card-icon-wrap">
+            <i class="fa-brands fa-linkedin-in"></i>
+          </div>
+          <div class="connect-card-content">
+            <span class="connect-card-name">LinkedIn</span>
+            <span class="connect-card-handle">saurav-kumar</span>
+          </div>
+          <div class="connect-card-arrow">
+            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+          </div>
+        </a>
+
+        <!-- 2. GitHub -->
+        <a href="https://github.com/sauravkumar3545"
+           target="_blank"
+           rel="noopener noreferrer"
+           class="connect-card connect-card-github"
+           aria-label="View Saurav Kumar's GitHub profile">
+          <div class="connect-card-icon-wrap">
+            <i class="fa-brands fa-github"></i>
+          </div>
+          <div class="connect-card-content">
+            <span class="connect-card-name">GitHub</span>
+            <span class="connect-card-handle">@sauravkumar3545</span>
+          </div>
+          <div class="connect-card-arrow">
+            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+          </div>
+        </a>
+
+        <!-- 3. Instagram -->
+        <a href="https://www.instagram.com/sauravkumar__3013?stkn=MWlia2Q2ZWZ1M2Vm"
+           target="_blank"
+           rel="noopener noreferrer"
+           class="connect-card connect-card-instagram"
+           aria-label="Follow Saurav Kumar on Instagram">
+          <div class="connect-card-icon-wrap">
+            <i class="fa-brands fa-instagram"></i>
+          </div>
+          <div class="connect-card-content">
+            <span class="connect-card-name">Instagram</span>
+            <span class="connect-card-handle">@sauravkumar__3013</span>
+          </div>
+          <div class="connect-card-arrow">
+            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+          </div>
+        </a>
+
+        <!-- 4. WhatsApp -->
+        <a href="https://wa.me/916207911534"
+           target="_blank"
+           rel="noopener noreferrer"
+           class="connect-card connect-card-whatsapp"
+           aria-label="Chat with Saurav Kumar on WhatsApp">
+          <div class="connect-card-icon-wrap">
+            <i class="fa-brands fa-whatsapp"></i>
+          </div>
+          <div class="connect-card-content">
+            <span class="connect-card-name">WhatsApp</span>
+          </div>
+          <div class="connect-card-arrow">
+            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+          </div>
+        </a>
+
+        <!-- 5. Portfolio -->
+        <a href="https://portfolio-saurav-53.vercel.app/"
+           target="_blank"
+           rel="noopener noreferrer"
+           class="connect-card connect-card-portfolio"
+           aria-label="Visit Saurav Kumar's Portfolio Website">
+          <div class="connect-card-icon-wrap">
+            <i class="fa-solid fa-globe"></i>
+          </div>
+          <div class="connect-card-content">
+            <span class="connect-card-name">Portfolio</span>
+            <span class="connect-card-handle">portfolio-saurav-53</span>
+          </div>
+          <div class="connect-card-arrow">
+            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+          </div>
+        </a>
+      </div>
+    </div>
+  </section>
 
   <!-- FOOTER -->
   <footer class="footer">
     <div class="footer-container">
-      <p>© 2026 ResumeBuilder. Universal, ATS-optimized, 100% private client-side resume generator & independent checker.</p>
+      <div class="footer-creator-credit">
+        <span class="creator-label">Made by <strong>Saurav Kumar</strong></span>
+      </div>
+      <p class="footer-copyright">© 2026 ResumeBuilder. Universal, ATS-optimized, 100% private client-side resume generator & independent checker.</p>
     </div>
   </footer>
+
+  <!-- ====================================================================== -->
+  <!-- JOB-SPECIFIC ATS RESUME CHECKER MODAL                                 -->
+  <!-- ====================================================================== -->
+  <div class="modal-backdrop" id="job-ats-modal">
+    <div class="modal-card job-ats-card">
+
+      <!-- HEADER -->
+      <div class="job-ats-header">
+        <div class="job-ats-header-title">
+          <div class="job-ats-header-icon">
+            <i class="fa-solid fa-bullseye"></i>
+          </div>
+          <div>
+            <h3>Job-Specific ATS Resume Checker</h3>
+            <p class="job-ats-header-sub">AI-Powered Job Match &amp; ATS Compatibility Analysis</p>
+          </div>
+        </div>
+        <button type="button" class="btn-icon-close" onclick="closeJobATSModal()" aria-label="Close">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- BODY: INPUT PANEL -->
+      <div class="job-ats-body" id="job-ats-input-panel">
+
+
+        <div class="job-ats-input-grid">
+
+          <!-- LEFT: RESUME UPLOAD -->
+          <div class="job-ats-section-block">
+            <div class="job-ats-block-label">
+              <i class="fa-solid fa-file-lines"></i> Resume
+            </div>
+
+            <!-- Tabs: Upload vs Builder -->
+            <div class="job-ats-source-tabs">
+              <button type="button" class="job-ats-tab active" id="tab-upload" onclick="switchJobATSTab('upload')">
+                <i class="fa-solid fa-cloud-arrow-up"></i> Upload File
+              </button>
+              <button type="button" class="job-ats-tab" id="tab-builder" onclick="switchJobATSTab('builder')">
+                <i class="fa-solid fa-sliders"></i> Use Builder Resume
+              </button>
+            </div>
+
+            <!-- Upload Panel -->
+            <div id="job-ats-upload-panel">
+              <div class="job-ats-dropzone" id="job-ats-dropzone" onclick="triggerJobATSFileInput()">
+                <i class="fa-solid fa-cloud-arrow-up job-ats-dz-icon"></i>
+                <div class="job-ats-dz-title"><strong>Drag &amp; Drop Resume</strong></div>
+                <div class="job-ats-dz-hint">or click to browse — PDF, DOCX, TXT</div>
+                <input type="file" id="job-ats-file-input" accept=".pdf,.docx,.txt" style="display:none;" onchange="handleJobATSFileSelect(event)">
+              </div>
+
+              <!-- File Info Card -->
+              <div class="job-ats-file-card" id="job-ats-file-card" style="display:none;">
+                <div class="job-ats-file-info">
+                  <i class="fa-solid fa-file-lines" style="color:var(--primary-color); font-size:1.5rem;"></i>
+                  <div>
+                    <div class="job-ats-file-name" id="job-ats-file-name">resume.pdf</div>
+                    <div class="job-ats-file-meta" id="job-ats-file-meta">120 KB · PDF</div>
+                  </div>
+                </div>
+                <button type="button" class="btn-icon-delete" onclick="clearJobATSFile()" title="Remove file">
+                  <i class="fa-solid fa-xmark"></i>
+                </button>
+              </div>
+
+              <span class="error-msg" id="job-ats-file-err" style="display:block; margin-top:0.4rem;"></span>
+            </div>
+
+            <!-- Builder Panel -->
+            <div id="job-ats-builder-panel" style="display:none;">
+              <div class="job-ats-builder-info">
+                <i class="fa-solid fa-circle-check" style="color:var(--accent-color);"></i>
+                Will analyze the resume currently built in the Resume Builder workspace.
+              </div>
+            </div>
+          </div>
+
+          <!-- RIGHT: JOB DETAILS -->
+          <div class="job-ats-section-block">
+            <div class="job-ats-block-label">
+              <i class="fa-solid fa-briefcase"></i> Target Job Details
+            </div>
+
+            <!-- Job Title -->
+            <div class="form-group" style="margin-bottom:0.85rem;">
+              <label for="job-ats-title" class="job-ats-field-label">
+                Target Job Title <span class="req">*</span> <span style="font-weight:400; color:var(--text-muted); font-size:0.75rem;">(Required for Job-Specific analysis)</span>
+              </label>
+              <input type="text" id="job-ats-title" class="form-control"
+                placeholder="e.g. Data Analyst, Software Engineer, ML Engineer"
+                maxlength="100">
+              <span class="error-msg" id="job-ats-title-err" style="display:block; margin-top:0.25rem;"></span>
+            </div>
+
+            <!-- Job Description -->
+            <div class="form-group">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.3rem;">
+                <label for="job-ats-jd" class="job-ats-field-label" style="margin-bottom:0;">
+                  Job Description <span style="font-weight:400; color:var(--text-muted); font-size:0.75rem;">(Paste complete JD for Job-Specific Score · Leave empty for General ATS)</span>
+                </label>
+                <div style="display:flex; gap:0.4rem; align-items:center;">
+                  <span class="job-ats-char-counter" id="job-ats-jd-counter">0 chars</span>
+                  <button type="button" class="btn btn-xs btn-secondary" onclick="clearJobATSJD()" title="Clear JD">
+                    <i class="fa-solid fa-eraser"></i> Clear
+                  </button>
+                </div>
+              </div>
+              <textarea id="job-ats-jd" class="form-control job-ats-jd-textarea"
+                rows="8"
+                placeholder="Paste the complete job description here...&#10;&#10;Include responsibilities, requirements, required skills, preferred skills, and any other details for the most accurate job-match analysis."
+                oninput="updateJobATSJDCounter()"></textarea>
+              <span class="error-msg" id="job-ats-jd-err" style="display:block; margin-top:0.25rem;"></span>
+            </div>
+          </div>
+
+        </div><!-- /job-ats-input-grid -->
+
+        <!-- ANALYZE BUTTON -->
+        <div class="job-ats-analyze-row">
+          <button type="button" class="btn btn-lg btn-job-ats btn-full-analyze" id="btn-job-ats-analyze" onclick="runJobATSAnalysis()">
+            <i class="fa-solid fa-microscope"></i> Analyze Resume
+          </button>
+        </div>
+
+      </div><!-- /job-ats-input-panel -->
+
+      <!-- BODY: RESULTS PANEL -->
+      <div class="job-ats-body" id="job-ats-results-panel" style="display:none;">
+
+        <!-- RESULTS CONTENT (filled dynamically) -->
+        <div id="job-ats-results-content"></div>
+
+        <!-- RESULTS FOOTER -->
+        <div class="job-ats-results-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeJobATSModal()">
+            <i class="fa-solid fa-xmark"></i> Close
+          </button>
+          <button type="button" class="btn btn-job-ats" onclick="resetJobATSToInput()">
+            <i class="fa-solid fa-rotate"></i> Analyze Another
+          </button>
+        </div>
+
+      </div><!-- /job-ats-results-panel -->
+
+    </div><!-- /modal-card -->
+  </div><!-- /modal-backdrop -->
 
   <!-- Script File -->
   <script src="script.js"></script>
