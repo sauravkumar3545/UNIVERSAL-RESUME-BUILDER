@@ -135,8 +135,6 @@ RESUME BUILDER/
 ├── index.html          → Main HTML — all sections, modals, and ATS modal
 ├── style.css           → All styles — dark theme, layout, animations, responsive
 ├── script.js           → All logic — builder, live preview, ATS engine, downloads
-├── assets/
-│   └── upi-qr-11.png   → UPI QR code for secure resume download payment
 └── README.md           → This file
 ```
 

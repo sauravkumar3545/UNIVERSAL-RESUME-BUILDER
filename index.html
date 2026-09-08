@@ -29,8 +29,6 @@
   <!-- html2pdf.js CDN for Direct Client-Side PDF Generation -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
-  <!-- Tesseract.js CDN for Client-Side Payment Screenshot OCR Analysis -->
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 </head>
 <body>
   <!-- NAVBAR -->
@@ -60,7 +58,7 @@
         <button type="button" class="btn btn-sm btn-outline-danger" onclick="confirmClearAll()" title="Reset Resume Data">
           <i class="fa-solid fa-rotate-left"></i> Reset
         </button>
-        <button type="button" class="btn btn-sm btn-primary" onclick="openDownloadAccessModal()" title="Download Resume">
+        <button type="button" class="btn btn-sm btn-primary" onclick="downloadResume('pdf')" title="Download Resume">
           <i class="fa-solid fa-file-arrow-down"></i> Download Resume
         </button>
       </div>
@@ -386,7 +384,7 @@
               <button type="button" class="btn btn-sm btn-accent" onclick="openATSChecker()">
                 <i class="fa-solid fa-magnifying-glass-chart"></i> Check ATS
               </button>
-              <button type="button" class="btn btn-sm btn-primary" onclick="openDownloadAccessModal()">
+              <button type="button" class="btn btn-sm btn-primary" onclick="downloadResume('pdf')">
                 <i class="fa-solid fa-file-arrow-down"></i> Download Resume
               </button>
             </div>
@@ -415,7 +413,7 @@
         <button type="button" class="btn btn-lg btn-accent" onclick="openATSChecker()">
           <i class="fa-solid fa-bullseye"></i> Check ATS Score
         </button>
-        <button type="button" class="btn btn-lg btn-primary" onclick="openDownloadAccessModal()">
+        <button type="button" class="btn btn-lg btn-primary" onclick="downloadResume('pdf')">
           <i class="fa-solid fa-file-arrow-down"></i> Download Resume
         </button>
       </div>
@@ -438,263 +436,6 @@
   </div>
 
 
-  <!-- DOWNLOAD ACCESS MODAL -->
-  <div class="modal-backdrop" id="download-access-modal">
-    <div class="modal-card download-access-card">
-      <div class="access-modal-header">
-        <div class="access-modal-title">
-          <i class="fa-solid fa-lock"></i>
-          <h3>Download Access</h3>
-        </div>
-        <button type="button" class="btn-icon-close" onclick="closeDownloadAccessModal()" aria-label="Close modal">
-          <i class="fa-solid fa-xmark"></i>
-        </button>
-      </div>
-
-      <p class="access-modal-sub">Choose your preferred access option to unlock and download your high-resolution resume.</p>
-
-      <div class="access-grid">
-        <!-- OPTION A: PASSWORD ACCESS -->
-        <div class="access-option-card">
-          <div class="access-badge">Option A</div>
-          <h4>Download with Password</h4>
-          <p class="access-desc">Enter authorization password to immediately unlock full high-resolution resume downloads.</p>
-
-          <div class="password-form-group">
-            <label for="access-password-input" class="access-input-label">Enter Password</label>
-            <div class="password-input-wrapper">
-              <i class="fa-solid fa-key pwd-icon"></i>
-              <input type="password" id="access-password-input" class="form-control" placeholder="Enter Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')handlePasswordUnlock()">
-              <button type="button" class="pwd-eye-btn" onclick="togglePasswordVisibility('access-password-input', 'pwd-toggle-icon')" title="Show / Hide Password">
-                <i class="fa-regular fa-eye" id="pwd-toggle-icon"></i>
-              </button>
-            </div>
-            <div class="access-error-box" id="password-error-msg" style="display:none;">
-              <i class="fa-solid fa-circle-exclamation"></i> <span>Incorrect password. Please try again.</span>
-            </div>
-          </div>
-
-          <button type="button" class="btn btn-secondary btn-full" onclick="handlePasswordUnlock()">
-            <i class="fa-solid fa-unlock"></i> Unlock & Download
-          </button>
-        </div>
-
-        <!-- OPTION B: PAID ACCESS (₹11) -->
-        <div class="access-option-card access-card-accent">
-          <div class="access-badge badge-paid">Option B</div>
-          <div class="access-price-row">
-            <span class="access-price-label">Amount:</span>
-            <span class="access-price-amount">₹11</span>
-          </div>
-          <h4>Pay ₹11 & Download</h4>
-          <p class="access-desc">Scan the UPI QR code to complete the ₹11 payment and download your resume in crisp PDF, PNG, or JPG formats.</p>
-
-          <div class="access-features-list">
-            <div class="feature-item"><i class="fa-solid fa-circle-check"></i> 100% Crisp Vector & High-Res Export</div>
-            <div class="feature-item"><i class="fa-solid fa-circle-check"></i> Standard A4 Proportions (No Clipping)</div>
-            <div class="feature-item"><i class="fa-solid fa-circle-check"></i> Direct PDF, PNG & JPG Downloads</div>
-          </div>
-
-          <button type="button" class="btn btn-primary btn-full" onclick="openPaymentModal()">
-            <i class="fa-solid fa-qrcode"></i> Pay ₹11 & Download
-          </button>
-        </div>
-      </div>
-
-      <!-- UNLOCKED DOWNLOAD BAR (VISIBLE UPON SUCCESSFUL PASSWORD UNLOCK) -->
-      <div id="password-unlocked-section" class="unlocked-download-section" style="display:none;">
-        <div class="unlocked-banner">
-          <i class="fa-solid fa-circle-check"></i>
-          <div>
-            <strong>Access Granted!</strong>
-            <p>Select your preferred format to download your resume:</p>
-          </div>
-        </div>
-        <div class="format-buttons-row">
-          <button type="button" class="btn btn-primary" onclick="downloadResume('pdf')">
-            <i class="fa-solid fa-file-pdf"></i> Download PDF
-          </button>
-          <button type="button" class="btn btn-secondary" onclick="downloadResume('png')">
-            <i class="fa-solid fa-file-image"></i> Download PNG
-          </button>
-          <button type="button" class="btn btn-secondary" onclick="downloadResume('jpg')">
-            <i class="fa-solid fa-file-image"></i> Download JPG
-          </button>
-        </div>
-      </div>
-
-    </div>
-  </div>
-
-  <!-- PROFESSIONAL MANUAL ₹11 UPI PAYMENT & SCREENSHOT VERIFICATION MODAL -->
-  <div class="modal-backdrop" id="payment-modal">
-    <div class="modal-card payment-modal-card">
-      <div class="payment-modal-header">
-        <div class="payment-modal-title">
-          <i class="fa-solid fa-shield-halved"></i>
-          <h3>Unlock Resume Download</h3>
-        </div>
-        <button type="button" class="btn-icon-close" onclick="closePaymentModal()" aria-label="Close modal">
-          <i class="fa-solid fa-xmark"></i>
-        </button>
-      </div>
-
-      <div class="payment-modal-body">
-
-        <!-- STEP 1: PAYMENT QR & RECEIVER DETAILS -->
-        <div class="payment-qr-card">
-          <div class="payment-badge-row">
-            <span class="payment-badge-tag"><i class="fa-solid fa-indian-rupee-sign"></i> ₹11 per Resume</span>
-            <span class="payment-badge-amount">Amount: ₹11</span>
-          </div>
-
-          <p class="qr-heading-prompt"><strong>Scan the QR code and pay exactly ₹11 to unlock your download.</strong></p>
-
-          <div class="qr-container">
-            <img src="assets/upi-qr-11.png" alt="UPI ₹11 Payment QR Code - SULEKHA DEVI" class="payment-qr-image" id="payment-qr-image">
-          </div>
-
-          <div class="payment-receiver-details">
-            <div class="receiver-row">
-              <span class="receiver-label"><i class="fa-solid fa-user-check"></i> Payee:</span>
-              <span class="receiver-value">SULEKHA DEVI</span>
-            </div>
-            <div class="receiver-row">
-              <span class="receiver-label"><i class="fa-solid fa-at"></i> UPI ID:</span>
-              <span class="receiver-value" style="font-family: monospace;">6207911534@ibl <button type="button" class="btn-copy-upi" onclick="copyUPIId()" title="Copy UPI ID"><i class="fa-regular fa-copy" id="copy-upi-icon"></i></button></span>
-            </div>
-            <div class="receiver-row">
-              <span class="receiver-label"><i class="fa-solid fa-tag"></i> Fixed Amount:</span>
-              <span class="receiver-value" style="color: var(--primary-color);">₹11.00 (Fixed)</span>
-            </div>
-            <div class="receiver-row">
-              <span class="receiver-label"><i class="fa-solid fa-wallet"></i> Apps Supported:</span>
-              <span class="receiver-value">GPay, PhonePe, Paytm, BHIM, Any UPI</span>
-            </div>
-          </div>
-
-          <a href="upi://pay?pa=6207911534@ibl&pn=SULEKHA%20DEVI&mc=0000&mode=02&purpose=00&am=11.00&cu=INR&tn=Resume%20Download" class="btn btn-sm btn-primary mobile-pay-btn" id="btn-upi-deeplink">
-            <i class="fa-solid fa-mobile-screen-button"></i> Pay ₹11 Directly in UPI App
-          </a>
-
-          <div style="margin-top:0.75rem; padding-top:0.65rem; border-top:1px dashed var(--border-color); font-size:0.75rem; color:var(--text-muted); display:flex; flex-direction:column; gap:0.25rem;">
-            <span><i class="fa-solid fa-check" style="color:var(--success-color);"></i> ₹11 payment unlocks your resume download (1 payment = 1 resume download)</span>
-            <span><i class="fa-solid fa-check" style="color:var(--success-color);"></i> Automatic multi-signal verification</span>
-            <span><i class="fa-solid fa-check" style="color:var(--success-color);"></i> Unlocks High-Res PDF, PNG &amp; JPG export</span>
-          </div>
-        </div>
-
-        <!-- STEP 2: SCREENSHOT UPLOAD & MULTI-LAYER VERIFICATION -->
-        <div class="payment-proof-card">
-          <div class="proof-card-header">
-            <h4><i class="fa-solid fa-receipt"></i> Upload Payment Screenshot</h4>
-            <span class="proof-format-hint">PNG, JPG, JPEG, WEBP (Max 10MB)</span>
-          </div>
-          <p class="proof-card-sub">After completing the ₹11 payment, upload the confirmation screenshot from your payment app showing the transaction details.</p>
-
-          <!-- Upload Drop Zone -->
-          <div class="screenshot-dropzone" id="screenshot-dropzone" onclick="triggerScreenshotPicker()">
-            <i class="fa-solid fa-cloud-arrow-up dropzone-cloud-icon"></i>
-            <div class="dropzone-main-text"><strong>Drag &amp; Drop Payment Screenshot</strong></div>
-            <div class="dropzone-sub-text">or click to browse from device / gallery</div>
-            <input type="file" id="payment-screenshot-input" accept="image/png,image/jpeg,image/jpg,image/webp" style="display:none;" onchange="handleScreenshotSelected(event)">
-          </div>
-
-          <!-- Screenshot Preview Card -->
-          <div class="screenshot-preview-box" id="screenshot-preview-box" style="display:none;">
-            <div class="preview-thumb-wrap" id="preview-thumb-wrap" onclick="openScreenshotLightbox()" title="Click to view full screenshot">
-              <img id="screenshot-preview-img" src="" alt="Payment Proof Screenshot Preview">
-              <div class="thumb-zoom-overlay"><i class="fa-solid fa-magnifying-glass-plus"></i></div>
-            </div>
-            <div class="preview-info-col">
-              <div class="preview-name" id="preview-file-name">screenshot.png</div>
-              <div class="preview-size" id="preview-file-size">1.2 MB</div>
-              <div class="preview-btn-group">
-                <button type="button" class="btn btn-xs btn-secondary" onclick="triggerScreenshotPicker()">
-                  <i class="fa-solid fa-arrows-rotate"></i> Replace
-                </button>
-                <button type="button" class="btn btn-xs btn-outline-danger" onclick="removeScreenshot()">
-                  <i class="fa-solid fa-trash"></i> Remove
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Verify Action Button -->
-          <div class="verify-btn-container">
-            <button type="button" class="btn btn-primary btn-full" id="btn-verify-proof" onclick="verifyPaymentSubmission()" disabled style="padding:0.75rem 1rem; font-size:0.95rem;">
-              <i class="fa-solid fa-shield-check"></i> Verify Payment &amp; Unlock Download
-            </button>
-          </div>
-
-          <!-- Multi-Layer Verification Progress & Signals Box -->
-          <div class="signals-analysis-box" id="signals-analysis-box" style="display:none;">
-            <div class="signals-box-title">
-              <i class="fa-solid fa-microchip"></i> Verification Progress &amp; Evidence
-            </div>
-            <div class="signals-grid">
-              <div class="signal-badge pending" id="sig-integ">
-                <i class="fa-solid fa-circle-half-stroke"></i> <span>1. Image quality &amp; structure</span>
-              </div>
-              <div class="signal-badge pending" id="sig-amt">
-                <i class="fa-solid fa-circle-half-stroke"></i> <span>2. Amount: ₹11 check</span>
-              </div>
-              <div class="signal-badge pending" id="sig-payee">
-                <i class="fa-solid fa-circle-half-stroke"></i> <span>3. Payee: SULEKHA DEVI</span>
-              </div>
-              <div class="signal-badge pending" id="sig-stat">
-                <i class="fa-solid fa-circle-half-stroke"></i> <span>4. Payment completion status</span>
-              </div>
-              <div class="signal-badge pending" id="sig-utr">
-                <i class="fa-solid fa-circle-half-stroke"></i> <span>5. Transaction / UTR ID</span>
-              </div>
-              <div class="signal-badge pending" id="sig-dup">
-                <i class="fa-solid fa-circle-half-stroke"></i> <span>6. Anti-replay duplicate check</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- State Messages: Pending / Failed / Verification Error -->
-          <div class="payment-state-banner" id="payment-state-banner" style="display:none;"></div>
-
-          <!-- SUCCESS STATE: PAYMENT VERIFIED & DOWNLOAD UNLOCKED -->
-          <div class="payment-verified-panel" id="payment-verified-panel" style="display:none;">
-            <div class="verified-badge-icon">
-              <i class="fa-solid fa-circle-check"></i>
-            </div>
-            <h3 class="verified-title">Payment Verified ✓</h3>
-            <p class="verified-sub" id="verified-panel-sub">₹11 payment successfully verified. Your resume is ready to download.</p>
-
-            <div class="verified-downloads">
-              <p class="verified-action-title">Download Your Resume:</p>
-              <div class="format-buttons-row">
-                <button type="button" class="btn btn-primary" onclick="downloadResume('pdf')">
-                  <i class="fa-solid fa-file-pdf"></i> Download PDF
-                </button>
-                <button type="button" class="btn btn-secondary" onclick="downloadResume('png')">
-                  <i class="fa-solid fa-file-image"></i> Download PNG
-                </button>
-                <button type="button" class="btn btn-secondary" onclick="downloadResume('jpg')">
-                  <i class="fa-solid fa-file-image"></i> Download JPG
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <!-- Security Notice -->
-          <div class="payment-security-notice">
-            <div class="security-notice-header">
-              <i class="fa-solid fa-lock"></i>
-              <span>Secure Multi-Signal Verification</span>
-            </div>
-            <p>Screenshot evidence is analyzed strictly in memory using multi-layer verification (OCR parsing, anti-tampering heuristics, and unique transaction check). Download access is unlocked upon successful verification.</p>
-          </div>
-
-        </div>
-
-      </div>
-    </div>
-  </div>
 
   <!-- ONE-PAGE LIMIT REACHED MODAL (ADD CONTENT BLOCKED) -->
   <div class="modal-backdrop" id="page-limit-modal">
