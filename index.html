@@ -526,13 +526,13 @@
     </div>
   </div>
 
-  <!-- PROFESSIONAL SECURE UPI PAYMENT MODAL -->
+  <!-- PROFESSIONAL MANUAL ₹11 UPI PAYMENT & SCREENSHOT VERIFICATION MODAL -->
   <div class="modal-backdrop" id="payment-modal">
     <div class="modal-card payment-modal-card">
       <div class="payment-modal-header">
         <div class="payment-modal-title">
           <i class="fa-solid fa-shield-halved"></i>
-          <h3>Secure UPI Payment & Download</h3>
+          <h3>Unlock Resume Download</h3>
         </div>
         <button type="button" class="btn-icon-close" onclick="closePaymentModal()" aria-label="Close modal">
           <i class="fa-solid fa-xmark"></i>
@@ -540,15 +540,15 @@
       </div>
 
       <div class="payment-modal-body">
-        
-        <!-- STEP 1: PAYMENT AMOUNT & QR DISPLAY -->
+
+        <!-- STEP 1: PAYMENT QR & RECEIVER DETAILS -->
         <div class="payment-qr-card">
           <div class="payment-badge-row">
-            <span class="payment-badge-tag"><i class="fa-solid fa-indian-rupee-sign"></i> Pre-filled UPI QR</span>
+            <span class="payment-badge-tag"><i class="fa-solid fa-indian-rupee-sign"></i> ₹11 per Resume</span>
             <span class="payment-badge-amount">Amount: ₹11</span>
           </div>
 
-          <p class="qr-heading-prompt"><strong>Scan the QR and pay exactly ₹11 to SULEKHA DEVI.</strong></p>
+          <p class="qr-heading-prompt"><strong>Scan the QR code and pay exactly ₹11 to unlock your download.</strong></p>
 
           <div class="qr-container">
             <img src="assets/upi-qr-11.png" alt="UPI ₹11 Payment QR Code - SULEKHA DEVI" class="payment-qr-image" id="payment-qr-image">
@@ -565,39 +565,46 @@
             </div>
             <div class="receiver-row">
               <span class="receiver-label"><i class="fa-solid fa-tag"></i> Fixed Amount:</span>
-              <span class="receiver-value" style="color: var(--primary-color);">₹11.00 (Pre-filled)</span>
+              <span class="receiver-value" style="color: var(--primary-color);">₹11.00 (Fixed)</span>
             </div>
             <div class="receiver-row">
-              <span class="receiver-label"><i class="fa-solid fa-wallet"></i> Apps:</span>
-              <span class="receiver-value">GPay, PhonePe, Paytm, BHIM</span>
+              <span class="receiver-label"><i class="fa-solid fa-wallet"></i> Apps Supported:</span>
+              <span class="receiver-value">GPay, PhonePe, Paytm, BHIM, Any UPI</span>
             </div>
           </div>
 
           <a href="upi://pay?pa=6207911534@ibl&pn=SULEKHA%20DEVI&mc=0000&mode=02&purpose=00&am=11.00&cu=INR&tn=Resume%20Download" class="btn btn-sm btn-primary mobile-pay-btn" id="btn-upi-deeplink">
             <i class="fa-solid fa-mobile-screen-button"></i> Pay ₹11 Directly in UPI App
           </a>
+
+          <div style="margin-top:0.75rem; padding-top:0.65rem; border-top:1px dashed var(--border-color); font-size:0.75rem; color:var(--text-muted); display:flex; flex-direction:column; gap:0.25rem;">
+            <span><i class="fa-solid fa-check" style="color:var(--success-color);"></i> ₹11 payment unlocks your resume download (1 payment = 1 resume download)</span>
+            <span><i class="fa-solid fa-check" style="color:var(--success-color);"></i> Automatic multi-signal verification</span>
+            <span><i class="fa-solid fa-check" style="color:var(--success-color);"></i> Unlocks High-Res PDF, PNG &amp; JPG export</span>
+          </div>
         </div>
 
-        <!-- STEP 2: SCREENSHOT UPLOAD & PROOF VERIFICATION -->
+        <!-- STEP 2: SCREENSHOT UPLOAD & MULTI-LAYER VERIFICATION -->
         <div class="payment-proof-card">
           <div class="proof-card-header">
             <h4><i class="fa-solid fa-receipt"></i> Upload Payment Screenshot</h4>
             <span class="proof-format-hint">PNG, JPG, JPEG, WEBP (Max 10MB)</span>
           </div>
-          <p class="proof-card-sub">Upload the confirmation screenshot from your payment app showing the ₹11 transaction and reference ID.</p>
+          <p class="proof-card-sub">After completing the ₹11 payment, upload the confirmation screenshot from your payment app showing the transaction details.</p>
 
           <!-- Upload Drop Zone -->
           <div class="screenshot-dropzone" id="screenshot-dropzone" onclick="triggerScreenshotPicker()">
             <i class="fa-solid fa-cloud-arrow-up dropzone-cloud-icon"></i>
-            <div class="dropzone-main-text"><strong>Drag & Drop Payment Screenshot</strong></div>
-            <div class="dropzone-sub-text">or click to browse from device / any accessible folder</div>
+            <div class="dropzone-main-text"><strong>Drag &amp; Drop Payment Screenshot</strong></div>
+            <div class="dropzone-sub-text">or click to browse from device / gallery</div>
             <input type="file" id="payment-screenshot-input" accept="image/png,image/jpeg,image/jpg,image/webp" style="display:none;" onchange="handleScreenshotSelected(event)">
           </div>
 
           <!-- Screenshot Preview Card -->
           <div class="screenshot-preview-box" id="screenshot-preview-box" style="display:none;">
-            <div class="preview-thumb-wrap">
+            <div class="preview-thumb-wrap" id="preview-thumb-wrap" onclick="openScreenshotLightbox()" title="Click to view full screenshot">
               <img id="screenshot-preview-img" src="" alt="Payment Proof Screenshot Preview">
+              <div class="thumb-zoom-overlay"><i class="fa-solid fa-magnifying-glass-plus"></i></div>
             </div>
             <div class="preview-info-col">
               <div class="preview-name" id="preview-file-name">screenshot.png</div>
@@ -615,51 +622,51 @@
 
           <!-- Verify Action Button -->
           <div class="verify-btn-container">
-            <button type="button" class="btn btn-accent btn-full" id="btn-verify-proof" onclick="verifyPaymentSubmission()" disabled>
-              <i class="fa-solid fa-magnifying-glass-chart"></i> Verify Payment Proof
+            <button type="button" class="btn btn-primary btn-full" id="btn-verify-proof" onclick="verifyPaymentSubmission()" disabled style="padding:0.75rem 1rem; font-size:0.95rem;">
+              <i class="fa-solid fa-shield-check"></i> Verify Payment &amp; Unlock Download
             </button>
           </div>
 
-          <!-- Multi-Signal Evidence Analysis Box -->
+          <!-- Multi-Layer Verification Progress & Signals Box -->
           <div class="signals-analysis-box" id="signals-analysis-box" style="display:none;">
             <div class="signals-box-title">
-              <i class="fa-solid fa-microchip"></i> Evidence & Signal Analysis
+              <i class="fa-solid fa-microchip"></i> Verification Progress &amp; Evidence
             </div>
             <div class="signals-grid">
-              <div class="signal-badge" id="sig-amt">
-                <i class="fa-solid fa-spinner fa-spin"></i> <span>Amount: ₹11 check</span>
+              <div class="signal-badge pending" id="sig-integ">
+                <i class="fa-solid fa-circle-half-stroke"></i> <span>1. Image quality &amp; structure</span>
               </div>
-              <div class="signal-badge" id="sig-stat">
-                <i class="fa-solid fa-spinner fa-spin"></i> <span>Payment Status check</span>
+              <div class="signal-badge pending" id="sig-amt">
+                <i class="fa-solid fa-circle-half-stroke"></i> <span>2. Amount: ₹11 check</span>
               </div>
-              <div class="signal-badge" id="sig-utr">
-                <i class="fa-solid fa-spinner fa-spin"></i> <span>Transaction / UTR ID check</span>
+              <div class="signal-badge pending" id="sig-payee">
+                <i class="fa-solid fa-circle-half-stroke"></i> <span>3. Payee: SULEKHA DEVI</span>
               </div>
-              <div class="signal-badge" id="sig-payee">
-                <i class="fa-solid fa-spinner fa-spin"></i> <span>Payee match check</span>
+              <div class="signal-badge pending" id="sig-stat">
+                <i class="fa-solid fa-circle-half-stroke"></i> <span>4. Payment completion status</span>
               </div>
-              <div class="signal-badge" id="sig-dup">
-                <i class="fa-solid fa-spinner fa-spin"></i> <span>Duplicate proof check</span>
+              <div class="signal-badge pending" id="sig-utr">
+                <i class="fa-solid fa-circle-half-stroke"></i> <span>5. Transaction / UTR ID</span>
               </div>
-              <div class="signal-badge" id="sig-integ">
-                <i class="fa-solid fa-spinner fa-spin"></i> <span>Image integrity check</span>
+              <div class="signal-badge pending" id="sig-dup">
+                <i class="fa-solid fa-circle-half-stroke"></i> <span>6. Anti-replay duplicate check</span>
               </div>
             </div>
           </div>
 
-          <!-- State Messages: Pending / Failed / Invalid Proof / Already Used -->
+          <!-- State Messages: Pending / Failed / Verification Error -->
           <div class="payment-state-banner" id="payment-state-banner" style="display:none;"></div>
 
-          <!-- SUCCESS STATE: PAYMENT VERIFIED -->
+          <!-- SUCCESS STATE: PAYMENT VERIFIED & DOWNLOAD UNLOCKED -->
           <div class="payment-verified-panel" id="payment-verified-panel" style="display:none;">
             <div class="verified-badge-icon">
               <i class="fa-solid fa-circle-check"></i>
             </div>
             <h3 class="verified-title">Payment Verified ✓</h3>
-            <p class="verified-sub">₹11 payment successfully verified.</p>
-            
+            <p class="verified-sub" id="verified-panel-sub">₹11 payment successfully verified. Your resume is ready to download.</p>
+
             <div class="verified-downloads">
-              <p class="verified-action-title">Download Resume:</p>
+              <p class="verified-action-title">Download Your Resume:</p>
               <div class="format-buttons-row">
                 <button type="button" class="btn btn-primary" onclick="downloadResume('pdf')">
                   <i class="fa-solid fa-file-pdf"></i> Download PDF
@@ -674,13 +681,13 @@
             </div>
           </div>
 
-          <!-- Security & Production Architecture Note -->
+          <!-- Security Notice -->
           <div class="payment-security-notice">
             <div class="security-notice-header">
               <i class="fa-solid fa-lock"></i>
-              <span>Production Verification & Privacy Assurance</span>
+              <span>Secure Multi-Signal Verification</span>
             </div>
-            <p>Uploaded screenshots are analyzed strictly in memory and are never stored in browser storage or publicly accessible URLs. In production environments, payment gateway webhooks (Razorpay / UPI) and automated WhatsApp notifications confirm authenticity server-side.</p>
+            <p>Screenshot evidence is analyzed strictly in memory using multi-layer verification (OCR parsing, anti-tampering heuristics, and unique transaction check). Download access is unlocked upon successful verification.</p>
           </div>
 
         </div>

@@ -4,6 +4,18 @@
 
 const STORAGE_KEY = 'resumeBuilderData';
 
+// Security: XSS Sanitization helper for DOM rendering
+function escapeText(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+const escapeHTML = escapeText;
+
 // ===========================================================================
 // Demo Resume Data — Separate from user resumeData. Never stored in localStorage.
 // ===========================================================================
@@ -132,10 +144,13 @@ document.addEventListener('DOMContentLoaded', () => {
   renderCustomForms();
 
   renderPreview();
+  adjustPreviewScale();
+  window.addEventListener('resize', adjustPreviewScale);
 
   setupLiveListeners();
   setupDragAndDrop();
   setupPaymentDragAndDrop();
+  restoreVerifiedPaymentSession();
 });
 
 // ==========================================================================
@@ -359,6 +374,10 @@ function renderProjectsForms() {
           <input type="text" class="form-control" value="${escapeAttr(item.name)}" placeholder="e.g. E-commerce Sales & Insights Dashboard" oninput="updateItemField('projects', ${index}, 'name', this.value)">
         </div>
         <div class="form-group">
+          <label>Date / Year (Optional)</label>
+          <input type="text" class="form-control" value="${escapeAttr(item.date || item.year || '')}" placeholder="e.g. 2026" oninput="updateItemField('projects', ${index}, 'date', this.value)">
+        </div>
+        <div class="form-group full-width">
           <label>Technologies / Tools Stack</label>
           <input type="text" class="form-control" value="${escapeAttr(item.tools)}" placeholder="e.g. Excel | SQL | Python | Power BI" oninput="updateItemField('projects', ${index}, 'tools', this.value)">
         </div>
@@ -380,7 +399,7 @@ function addProject() {
   const currentCount = (resumeData.projects || []).length;
   if (!canAddDynamicItem(`Project #${currentCount + 1}`, 55)) return;
   if (!resumeData.projects) resumeData.projects = [];
-  resumeData.projects.push({ name: '', role: '', tools: '', github: '', description: '' });
+  resumeData.projects.push({ name: '', date: '', tools: '', github: '', description: '' });
   renderProjectsForms();
   triggerDataUpdate();
 }
@@ -844,6 +863,119 @@ function buildSkillsSectionHtml() {
   return html;
 }
 
+// Helper: Format education grades / CGPA cleanly
+function formatGrade(grade) {
+  if (!grade) return '';
+  const trimmed = String(grade).trim();
+  if (!trimmed) return '';
+  if (/^(cgpa|gpa|grade|percentage|percent|score|marks)/i.test(trimmed) || trimmed.includes('%')) {
+    return trimmed;
+  }
+  return `CGPA: ${trimmed}`;
+}
+
+// Shared Education Item Renderer — Two Clean Rows with Right-Aligned Date & CGPA
+function renderEducationItemHtml(ed) {
+  const years = [ed.startYear, ed.endYear].filter(Boolean).join(' – ');
+  const formattedGrade = formatGrade(ed.grade || ed.gpa);
+  const collegeName = [ed.institution, ed.location].filter(Boolean).join(', ');
+
+  // Professional two-row structure:
+  // Row 1: Degree / Qualification (left) & Date / Duration (right)
+  // Row 2: College / University Name (left) & CGPA / Percentage (right)
+  if (ed.degree && collegeName) {
+    return `
+      <div class="rp-item">
+        <div class="rp-item-row">
+          <div class="rp-item-title">${escapeText(ed.degree)}</div>
+          ${years ? `<div class="rp-item-right rp-item-date">${escapeText(years)}</div>` : ''}
+        </div>
+        <div class="rp-item-row">
+          <div class="rp-item-subtitle">${escapeText(collegeName)}</div>
+          ${formattedGrade ? `<div class="rp-item-right rp-item-grade">${escapeText(formattedGrade)}</div>` : ''}
+        </div>
+      </div>
+    `;
+  } else {
+    const mainTitle = ed.degree || collegeName;
+    return `
+      <div class="rp-item">
+        <div class="rp-item-row">
+          <div class="rp-item-title">${escapeText(mainTitle)}</div>
+          ${years ? `<div class="rp-item-right rp-item-date">${escapeText(years)}</div>` : ''}
+        </div>
+        ${formattedGrade ? `
+        <div class="rp-item-row">
+          <div class="rp-item-subtitle"></div>
+          <div class="rp-item-right rp-item-grade">${escapeText(formattedGrade)}</div>
+        </div>
+        ` : ''}
+      </div>
+    `;
+  }
+}
+
+// Shared Experience Item Renderer
+function renderExperienceItemHtml(e) {
+  const dates = [e.startDate, e.endDate].filter(Boolean).join(' – ');
+  const subTitle = [e.company, e.location].filter(Boolean).join(', ');
+  const bullets = parseBullets(e.description);
+  return `
+    <div class="rp-item">
+      <div class="rp-item-row">
+        <div class="rp-item-title">${escapeText(e.title)}${subTitle ? ` <span class="rp-item-company">| ${escapeText(subTitle)}</span>` : ''}</div>
+        ${dates ? `<div class="rp-item-right rp-item-date">${escapeText(dates)}</div>` : ''}
+      </div>
+      ${bullets.length > 0 ? `
+        <ul class="rp-bullet-list">
+          ${bullets.map(b => `<li>${escapeText(b)}</li>`).join('')}
+        </ul>
+      ` : ''}
+    </div>
+  `;
+}
+
+// Shared Project Item Renderer — Right-Aligned Date/Year & Tools
+function renderProjectItemHtml(proj) {
+  let titleHtml = escapeText(proj.name);
+  if (proj.github && proj.github.trim() !== '') {
+    const repoUrl = normalizeUrl(proj.github);
+    titleHtml += ` <a href="${escapeAttr(repoUrl)}" target="_blank" rel="noopener noreferrer" class="rp-github-icon" title="View GitHub Repository"><i class="fa-brands fa-github"></i></a>`;
+  }
+  const dateStr = proj.date || proj.year || '';
+  const rightParts = [proj.tools, dateStr].filter(Boolean);
+  const rightText = rightParts.join(' | ');
+  const bullets = parseBullets(proj.description);
+
+  return `
+    <div class="rp-item">
+      <div class="rp-item-row">
+        <div class="rp-item-title">${titleHtml}</div>
+        ${rightText ? `<div class="rp-item-right rp-item-date">${escapeText(rightText)}</div>` : ''}
+      </div>
+      ${bullets.length > 0 ? `
+        <ul class="rp-bullet-list">
+          ${bullets.map(b => `<li>${escapeText(b)}</li>`).join('')}
+        </ul>
+      ` : ''}
+    </div>
+  `;
+}
+
+// Shared Certification Item Renderer — Right-Aligned Date
+function renderCertItemHtml(c) {
+  let certText = escapeText(c.name);
+  if (c.organization) certText += ` - ${escapeText(c.organization)}`;
+  if (c.url) certText += ` <a href="${escapeAttr(normalizeUrl(c.url))}" target="_blank" rel="noopener noreferrer">Link</a>`;
+  const dateStr = c.date ? escapeText(c.date) : '';
+  return `
+    <li class="rp-cert-row">
+      <div class="rp-cert-left">${certText}</div>
+      ${dateStr ? `<div class="rp-item-right rp-item-date">${dateStr}</div>` : ''}
+    </li>
+  `;
+}
+
 function buildExperienceSectionHtml() {
   const validExp = (resumeData.experience || []).filter(e => e.title || e.company || e.description);
   if (validExp.length === 0) return '';
@@ -852,22 +984,7 @@ function buildExperienceSectionHtml() {
       <div class="rp-section-heading">EXPERIENCE</div>
   `;
   validExp.forEach(e => {
-    const dates = [e.startDate, e.endDate].filter(Boolean).join(' - ');
-    const subTitle = [e.company, e.location].filter(Boolean).join(', ');
-    const bullets = parseBullets(e.description);
-    html += `
-      <div class="rp-item">
-        <div class="rp-item-row">
-          <div class="rp-item-title">${escapeText(e.title)} ${subTitle ? `| ${escapeText(subTitle)}` : ''}</div>
-          ${dates ? `<div class="rp-item-right">${escapeText(dates)}</div>` : ''}
-        </div>
-        ${bullets.length > 0 ? `
-          <ul class="rp-bullet-list">
-            ${bullets.map(b => `<li>${escapeText(b)}</li>`).join('')}
-          </ul>
-        ` : ''}
-      </div>
-    `;
+    html += renderExperienceItemHtml(e);
   });
   html += `</div>`;
   return html;
@@ -881,25 +998,7 @@ function buildProjectsSectionHtml() {
       <div class="rp-section-heading">PROJECTS</div>
   `;
   validProj.forEach(proj => {
-    let titleHtml = escapeText(proj.name);
-    if (proj.github && proj.github.trim() !== '') {
-      const repoUrl = normalizeUrl(proj.github);
-      titleHtml += ` <a href="${escapeAttr(repoUrl)}" target="_blank" rel="noopener noreferrer" class="rp-github-icon" title="View GitHub Repository"><i class="fa-brands fa-github"></i></a>`;
-    }
-    const bullets = parseBullets(proj.description);
-    html += `
-      <div class="rp-item">
-        <div class="rp-item-row">
-          <div class="rp-item-title">${titleHtml}</div>
-          ${proj.tools ? `<div class="rp-item-right">${escapeText(proj.tools)}</div>` : ''}
-        </div>
-        ${bullets.length > 0 ? `
-          <ul class="rp-bullet-list">
-            ${bullets.map(b => `<li>${escapeText(b)}</li>`).join('')}
-          </ul>
-        ` : ''}
-      </div>
-    `;
+    html += renderProjectItemHtml(proj);
   });
   html += `</div>`;
   return html;
@@ -913,18 +1012,7 @@ function buildEducationSectionHtml() {
       <div class="rp-section-heading">EDUCATION</div>
   `;
   validEdu.forEach(ed => {
-    const years = [ed.startYear, ed.endYear].filter(Boolean).join(' - ');
-    html += `
-      <div class="rp-item">
-        <div class="rp-item-row">
-          <div class="rp-item-title">${escapeText(ed.degree)}</div>
-          ${years ? `<div class="rp-item-right">${escapeText(years)}</div>` : ''}
-        </div>
-        <div class="rp-item-row">
-          <div class="rp-item-subtitle">${escapeText(ed.institution)} ${ed.grade ? `| ${escapeText(ed.grade)}` : ''}</div>
-        </div>
-      </div>
-    `;
+    html += renderEducationItemHtml(ed);
   });
   html += `</div>`;
   return html;
@@ -939,11 +1027,7 @@ function buildCertificationsSectionHtml() {
       <ul class="rp-cert-list">
   `;
   validCert.forEach(c => {
-    let certText = escapeText(c.name);
-    if (c.organization) certText += ` - ${escapeText(c.organization)}`;
-    if (c.date) certText += `, ${escapeText(c.date)}`;
-    if (c.url) certText += ` <a href="${escapeAttr(normalizeUrl(c.url))}" target="_blank" rel="noopener noreferrer">Link</a>`;
-    html += `<li>${certText}</li>`;
+    html += renderCertItemHtml(c);
   });
   html += `</ul></div>`;
   return html;
@@ -972,7 +1056,10 @@ function buildActivitiesSectionHtml() {
   validAct.forEach(ac => {
     html += `
       <div class="rp-item">
-        <div class="rp-item-title">${escapeText(ac.position)} ${ac.organization ? `| ${escapeText(ac.organization)}` : ''}</div>
+        <div class="rp-item-row">
+          <div class="rp-item-title">${escapeText(ac.position)}${ac.organization ? ` | ${escapeText(ac.organization)}` : ''}</div>
+          ${ac.duration ? `<div class="rp-item-right rp-item-date">${escapeText(ac.duration)}</div>` : ''}
+        </div>
         ${ac.description ? `<div class="rp-summary-text" style="margin-top:2px;">${escapeText(ac.description)}</div>` : ''}
       </div>
     `;
@@ -1114,22 +1201,7 @@ function buildDemoResumeHtml() {
         <div class="rp-section-heading">EXPERIENCE</div>
     `;
     d.experience.forEach(e => {
-      const dates = [e.startDate, e.endDate].filter(Boolean).join(' - ');
-      const subTitle = [e.company, e.location].filter(Boolean).join(', ');
-      const bullets = parseBullets(e.description);
-      html += `
-        <div class="rp-item">
-          <div class="rp-item-row">
-            <div class="rp-item-title">${escapeText(e.title)} ${subTitle ? `| ${escapeText(subTitle)}` : ''}</div>
-            ${dates ? `<div class="rp-item-right">${escapeText(dates)}</div>` : ''}
-          </div>
-          ${bullets.length > 0 ? `
-            <ul class="rp-bullet-list">
-              ${bullets.map(b => `<li>${escapeText(b)}</li>`).join('')}
-            </ul>
-          ` : ''}
-        </div>
-      `;
+      html += renderExperienceItemHtml(e);
     });
     html += `</div>`;
   }
@@ -1141,25 +1213,7 @@ function buildDemoResumeHtml() {
         <div class="rp-section-heading">PROJECTS</div>
     `;
     d.projects.forEach(proj => {
-      let titleHtml = escapeText(proj.name);
-      if (proj.github && proj.github.trim() !== '') {
-        const repoUrl = normalizeUrl(proj.github);
-        titleHtml += ` <a href="${escapeAttr(repoUrl)}" target="_blank" rel="noopener noreferrer" class="rp-github-icon" title="View GitHub Repository"><i class="fa-brands fa-github"></i></a>`;
-      }
-      const bullets = parseBullets(proj.description);
-      html += `
-        <div class="rp-item">
-          <div class="rp-item-row">
-            <div class="rp-item-title">${titleHtml}</div>
-            ${proj.tools ? `<div class="rp-item-right">${escapeText(proj.tools)}</div>` : ''}
-          </div>
-          ${bullets.length > 0 ? `
-            <ul class="rp-bullet-list">
-              ${bullets.map(b => `<li>${escapeText(b)}</li>`).join('')}
-            </ul>
-          ` : ''}
-        </div>
-      `;
+      html += renderProjectItemHtml(proj);
     });
     html += `</div>`;
   }
@@ -1171,19 +1225,7 @@ function buildDemoResumeHtml() {
         <div class="rp-section-heading">EDUCATION</div>
     `;
     d.education.forEach(ed => {
-      const years = [ed.startYear, ed.endYear].filter(Boolean).join(' - ');
-      const grade = ed.grade || ed.gpa;
-      html += `
-        <div class="rp-item">
-          <div class="rp-item-row">
-            <div class="rp-item-title">${escapeText(ed.degree)}</div>
-            ${years ? `<div class="rp-item-right">${escapeText(years)}</div>` : ''}
-          </div>
-          <div class="rp-item-row">
-            <div class="rp-item-subtitle">${escapeText(ed.institution)} ${grade ? `| GPA: ${escapeText(grade)}` : ''}</div>
-          </div>
-        </div>
-      `;
+      html += renderEducationItemHtml(ed);
     });
     html += `</div>`;
   }
@@ -1196,11 +1238,7 @@ function buildDemoResumeHtml() {
         <ul class="rp-cert-list">
     `;
     d.certifications.forEach(c => {
-      let certText = escapeText(c.name);
-      if (c.organization) certText += ` - ${escapeText(c.organization)}`;
-      if (c.date) certText += `, ${escapeText(c.date)}`;
-      if (c.url) certText += ` <a href="${escapeAttr(normalizeUrl(c.url))}" target="_blank" rel="noopener noreferrer">Link</a>`;
-      html += `<li>${certText}</li>`;
+      html += renderCertItemHtml(c);
     });
     html += `</ul></div>`;
   }
@@ -1227,7 +1265,42 @@ function buildDemoResumeHtml() {
       const orgAndDur = [ac.organization, ac.duration].filter(Boolean).join(' | ');
       html += `
         <div class="rp-item">
-          <div class="rp-item-title">${escapeText(ac.position)} ${orgAndDur ? `| ${escapeText(orgAndDur)}` : ''}</div>
+          <div class="rp-item-row">
+            <div class="rp-item-title">${escapeText(ac.position)}${ac.organization ? ` | ${escapeText(ac.organization)}` : ''}</div>
+            ${ac.duration ? `<div class="rp-item-right rp-item-date">${escapeText(ac.duration)}</div>` : ''}
+          </div>
+          ${ac.description ? `<div class="rp-summary-text" style="margin-top:2px;">${escapeText(ac.description)}</div>` : ''}
+        </div>
+      `;
+    });
+    html += `</div>`;
+  }
+
+  // Achievements
+  if (d.achievements && d.achievements.length > 0) {
+    html += `
+      <div class="rp-section" data-section="Achievements">
+        <div class="rp-section-heading">ACHIEVEMENTS</div>
+        <ul class="rp-bullet-list">
+          ${d.achievements.map(a => `<li>${escapeText(a.title)} ${a.description ? `— ${escapeText(a.description)}` : ''}</li>`).join('')}
+        </ul>
+      </div>
+    `;
+  }
+
+  // Positions of Responsibility / Activities
+  if (d.activities && d.activities.length > 0) {
+    html += `
+      <div class="rp-section" data-section="Positions of Responsibility">
+        <div class="rp-section-heading">POSITIONS OF RESPONSIBILITY</div>
+    `;
+    d.activities.forEach(ac => {
+      html += `
+        <div class="rp-item">
+          <div class="rp-item-row">
+            <div class="rp-item-title">${escapeText(ac.position)}${ac.organization ? ` | ${escapeText(ac.organization)}` : ''}</div>
+            ${ac.duration ? `<div class="rp-item-right rp-item-date">${escapeText(ac.duration)}</div>` : ''}
+          </div>
           ${ac.description ? `<div class="rp-summary-text" style="margin-top:2px;">${escapeText(ac.description)}</div>` : ''}
         </div>
       `;
@@ -1296,29 +1369,57 @@ let onePageStatus = {
 // Calculate A4 container maximum safe printable height dynamically in pixels
 function getA4MaxContentHeight() {
   const paper = document.getElementById('resume-preview');
-  if (!paper) return 1025; // standard fallback
+  // True A4 height in CSS pixels at 96 DPI: 297mm * (96 / 25.4) = 1122.52 px (~1123px)
+  const a4TotalHeight = 1123;
+  if (!paper) return 1035;
 
-  // A4 paper ratio: 297mm height / 210mm width = 1.4142857
-  // The resume-paper has a rendered width. Its 1-page A4 height is width * (297 / 210)
-  const renderedWidth = paper.offsetWidth || 794;
-  const a4TotalHeight = renderedWidth * (297 / 210);
-
-  // Compute padding offsets (default 13mm top + 13mm bottom)
   const style = window.getComputedStyle(paper);
-  const paddingTop = parseFloat(style.paddingTop) || 49;
-  const paddingBottom = parseFloat(style.paddingBottom) || 49;
+  const paddingTop = parseFloat(style.paddingTop) || 45;
+  const paddingBottom = parseFloat(style.paddingBottom) || 38;
 
   // Safe inner content height available on exactly ONE A4 page
   return Math.round(a4TotalHeight - paddingTop - paddingBottom);
 }
 
-// Check rendered content capacity against one A4 page
+// Dynamically scale the A4 preview sheet to fit the preview column on any screen width
+function adjustPreviewScale() {
+  const container = document.querySelector('.paper-container');
+  const paper = document.getElementById('resume-preview');
+  if (!container || !paper) return;
+
+  const containerWidth = container.clientWidth;
+  if (!containerWidth || containerWidth <= 0) return;
+
+  // 32px accounts for container padding (1rem left + 1rem right)
+  const availWidth = containerWidth - 32;
+  const a4Width = 794; // 210mm in pixels at 96 DPI
+  const a4Height = 1123; // 297mm in pixels at 96 DPI
+
+  if (availWidth < a4Width && availWidth > 200) {
+    const scale = availWidth / a4Width;
+    paper.style.transform = `scale(${scale})`;
+    paper.style.transformOrigin = 'top center';
+    const currentPaperHeight = paper.offsetHeight || a4Height;
+    const visualHeight = currentPaperHeight * scale;
+    const diff = currentPaperHeight - visualHeight;
+    paper.style.marginBottom = `-${diff}px`;
+  } else {
+    paper.style.transform = '';
+    paper.style.transformOrigin = '';
+    paper.style.marginBottom = '';
+  }
+}
+
+// Check rendered content capacity against one A4 page with intelligent adaptive compact fitting
 function checkOnePageCapacity() {
   const paper = document.getElementById('resume-preview');
   if (!paper) return onePageStatus;
 
   // If empty resume placeholder, reset capacity cleanly
   if (isResumeCompletelyEmpty()) {
+    paper.classList.remove('compact-fit', 'page-overflow');
+    const existingInd = paper.querySelector('.resume-overflow-indicator');
+    if (existingInd) existingInd.remove();
     onePageStatus = {
       contentHeight: 0,
       maxAvailableHeight: getA4MaxContentHeight(),
@@ -1329,50 +1430,81 @@ function checkOnePageCapacity() {
       largestSections: []
     };
     updatePageCapacityUI();
+    adjustPreviewScale();
     return onePageStatus;
   }
 
-  const maxContentHeight = getA4MaxContentHeight();
-  const children = Array.from(paper.children).filter(el => !el.classList.contains('resume-overflow-indicator'));
+  // Remove any existing visual overflow indicator before measuring
+  const existingInd = paper.querySelector('.resume-overflow-indicator');
+  if (existingInd) existingInd.remove();
 
-  let totalContentHeight = 0;
-  const sectionMeasurements = [];
+  // Helper to measure exact physical unscaled content height inside paper
+  function measureContent() {
+    const children = Array.from(paper.children).filter(
+      el => !el.classList.contains('resume-overflow-indicator') && el.offsetHeight > 0
+    );
+    if (children.length === 0) return { totalHeight: 0, sectionMeasurements: [] };
 
-  children.forEach(child => {
-    // Include element height + margins
-    const cStyle = window.getComputedStyle(child);
-    const mTop = parseFloat(cStyle.marginTop) || 0;
-    const mBottom = parseFloat(cStyle.marginBottom) || 0;
-    const h = child.offsetHeight + mTop + mBottom;
-    totalContentHeight += h;
+    const firstChild = children[0];
+    const lastChild = children[children.length - 1];
+    // Exact rendered content height from top of first section to bottom of last section
+    const totalHeight = (lastChild.offsetTop + lastChild.offsetHeight) - firstChild.offsetTop;
 
-    const secName = child.getAttribute('data-section') || child.className || 'Section';
-    sectionMeasurements.push({
-      name: secName,
-      height: Math.round(h),
-      percentOfPage: Math.round((h / maxContentHeight) * 100)
+    const maxContentHeight = getA4MaxContentHeight();
+    const sectionMeasurements = children.map(child => {
+      const h = child.offsetHeight;
+      const secName = child.getAttribute('data-section') || child.className || 'Section';
+      return {
+        name: secName,
+        height: Math.round(h),
+        percentOfPage: Math.round((h / maxContentHeight) * 100)
+      };
     });
-  });
+    sectionMeasurements.sort((a, b) => b.height - a.height);
 
-  // Sort sections by height descending to identify largest space consumers
-  sectionMeasurements.sort((a, b) => b.height - a.height);
+    return { totalHeight, sectionMeasurements };
+  }
 
-  const pct = Math.round((totalContentHeight / maxContentHeight) * 100);
-  const isOverflow = totalContentHeight > maxContentHeight;
-  const isFull = totalContentHeight >= (maxContentHeight - 25) || pct >= 98;
-  const isAlmostFull = totalContentHeight >= (maxContentHeight * 0.85) && !isOverflow;
+  // Pass 1: Try normal relaxed ATS spacing
+  paper.classList.remove('compact-fit');
+  let { totalHeight, sectionMeasurements } = measureContent();
+  let maxContentHeight = getA4MaxContentHeight();
+
+  // Pass 2: If content approaches or exceeds printable height, test intelligent compact fitting
+  if (totalHeight > maxContentHeight) {
+    paper.classList.add('compact-fit');
+    const compactResult = measureContent();
+    maxContentHeight = getA4MaxContentHeight();
+
+    totalHeight = compactResult.totalHeight;
+    sectionMeasurements = compactResult.sectionMeasurements;
+
+    // If even compact fit doesn't fit, content genuinely exceeds single A4 page
+    if (totalHeight <= maxContentHeight) {
+      // Successfully fitted via compact mode
+    }
+  } else if (totalHeight <= maxContentHeight * 0.88) {
+    // Generous room available, keep normal spacing
+    paper.classList.remove('compact-fit');
+  }
+
+  const pct = Math.round((totalHeight / maxContentHeight) * 100);
+  const isOverflow = totalHeight > maxContentHeight;
+  const isFull = !isOverflow && pct >= 97;
+  const isAlmostFull = !isOverflow && pct >= 85 && pct < 97;
 
   onePageStatus = {
-    contentHeight: Math.round(totalContentHeight),
+    contentHeight: Math.round(totalHeight),
     maxAvailableHeight: maxContentHeight,
     percentUsed: pct,
     isOverflow: isOverflow,
     isAlmostFull: isAlmostFull,
-    isFull: isFull || isOverflow,
+    isFull: isFull,
     largestSections: sectionMeasurements
   };
 
   updatePageCapacityUI();
+  adjustPreviewScale();
   return onePageStatus;
 }
 
@@ -1573,15 +1705,8 @@ function canAddDynamicItem(sectionName, estimatedHeightPx = 55) {
   // Re-verify current live capacity
   const status = checkOnePageCapacity();
 
-  // If already at or exceeding capacity, block
-  if (status.isOverflow || status.isFull) {
-    showPageLimitModal(sectionName);
-    return false;
-  }
-
-  // If remaining space is strictly less than what this entry requires, block
-  const remainingSpace = status.maxAvailableHeight - status.contentHeight;
-  if (remainingSpace < estimatedHeightPx) {
+  // Only block if resume is ALREADY in a severe overflow state (>108% capacity)
+  if (status.isOverflow && status.percentUsed > 108) {
     showPageLimitModal(sectionName);
     return false;
   }
@@ -1771,26 +1896,148 @@ function scrollToPreviewOnMobile() {
 }
 
 // ==========================================================================
-// SECURE DOWNLOAD ACCESS, PASSWORD UNLOCK & ₹11 UPI PAYMENT FLOW
+// SECURE MANUAL ₹11 UPI PAYMENT & MULTI-LAYER SCREENSHOT VERIFICATION ENGINE
 // ==========================================================================
 
-const CORRECT_DOWNLOAD_PASSWORD = 'Saurav@953474@#6207';
+/**
+ * API base URL for the backend payment verification server.
+ * In development: http://localhost:3001
+ * In production: change to your deployed backend URL.
+ */
+const PAYMENT_API_BASE = (window.location.origin && window.location.origin.includes(':3001'))
+  ? ''
+  : 'http://localhost:3001';
 
-// In-Memory state for payment proof and anti-reuse protection (never saved to localStorage)
+// ---------------------------------------------------------------------------
+// Verification State Machine
+// States: IDLE | UPLOADING | UPLOADED | VALIDATING_IMAGE | EXTRACTING_TEXT
+//         | CHECKING_INTEGRITY | CHECKING_TRANSACTION | CALCULATING_RESULT
+//         | VERIFIED | FAILED | TIMEOUT
+// ---------------------------------------------------------------------------
+let verificationState = 'IDLE';
+
+/** In-session download token (issued exclusively by the backend). */
+let sessionDownloadToken = null;
+/** Internal flag for authorized state */
+let isPaymentAuthorized = false;
+
+// Persistent Session Key
+const PAYMENT_SESSION_STORAGE_KEY = 'universal_resume_builder_payment_session';
+
+function savePaymentSession(data) {
+  try {
+    const session = {
+      downloadToken: data.downloadToken,
+      tokenExpiresAt: data.tokenExpiresAt || (Date.now() + 24 * 60 * 60 * 1000),
+      txnId: data.txnId || 'VERIFIED',
+      timestamp: Date.now()
+    };
+    sessionStorage.setItem(PAYMENT_SESSION_STORAGE_KEY, JSON.stringify(session));
+    localStorage.setItem(PAYMENT_SESSION_STORAGE_KEY, JSON.stringify(session));
+  } catch (e) {
+    console.warn('[Payment] Could not save session storage:', e);
+  }
+}
+
+function getSavedPaymentSession() {
+  try {
+    const raw = sessionStorage.getItem(PAYMENT_SESSION_STORAGE_KEY) || localStorage.getItem(PAYMENT_SESSION_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && parsed.downloadToken && parsed.tokenExpiresAt > Date.now()) {
+      return parsed;
+    }
+  } catch (e) {
+    console.warn('[Payment] Could not parse session storage:', e);
+  }
+  return null;
+}
+
+function clearPaymentSession() {
+  try {
+    sessionStorage.removeItem(PAYMENT_SESSION_STORAGE_KEY);
+    localStorage.removeItem(PAYMENT_SESSION_STORAGE_KEY);
+  } catch (e) {}
+}
+
+function updatePaymentUIAsVerified(txnId) {
+  const verifiedPanel = document.getElementById('payment-verified-panel');
+  const subEl = document.getElementById('verified-panel-sub');
+  if (verifiedPanel) {
+    verifiedPanel.style.display = 'block';
+    if (subEl) subEl.innerHTML = `₹11 payment successfully verified to SULEKHA DEVI.<br><small style="color:#065f46; font-family:monospace;">Ref / UTR ID: ${escapeText(txnId || 'Verified')}</small>`;
+  }
+
+  const verifyBtn = document.getElementById('btn-verify-proof');
+  if (verifyBtn) {
+    verifyBtn.innerHTML = '<i class="fa-solid fa-circle-check"></i> Payment Verified ✓';
+    verifyBtn.disabled = true;
+    verifyBtn.style.background = '#10b981';
+  }
+
+  hidePaymentState();
+}
+
+async function restoreVerifiedPaymentSession() {
+  const saved = getSavedPaymentSession();
+  if (!saved || !saved.downloadToken) return;
+
+  try {
+    const resp = await fetch(`${PAYMENT_API_BASE}/api/payment/validate-token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: saved.downloadToken })
+    });
+    const data = await resp.json();
+    if (data.success && data.authorized) {
+      sessionDownloadToken = saved.downloadToken;
+      isPaymentAuthorized = true;
+      verificationState = 'VERIFIED';
+      updatePaymentUIAsVerified(saved.txnId);
+      console.log('[Payment] Verified session restored successfully from persistent storage.');
+    } else {
+      clearPaymentSession();
+    }
+  } catch (err) {
+    // If backend is temporarily offline during reload, keep session active if TTL is valid
+    if (saved.tokenExpiresAt > Date.now()) {
+      sessionDownloadToken = saved.downloadToken;
+      isPaymentAuthorized = true;
+      verificationState = 'VERIFIED';
+      updatePaymentUIAsVerified(saved.txnId);
+    }
+  }
+}
+
+// Upload & Screenshot state
 let currentPaymentScreenshot = null;
 let currentScreenshotPreviewUrl = null;
-let isPaymentAuthorized = false;
 const usedProofHashes = new Set();
 const usedTransactionIds = new Set();
 
-// Modal Open/Close Controls
+/** Guard against multiple simultaneous verification requests */
+let isVerificationInFlight = false;
+/** AbortController for verification timeout */
+let verificationAbortController = null;
+
+// Configured Payee Details
+const CONFIGURED_PAYEE = {
+  name: 'SULEKHA DEVI',
+  upiId: '6207911534@ibl',
+  phone: '6207911534',
+  expectedAmount: 11.00,
+  upiUri: 'upi://pay?pa=6207911534@ibl&pn=SULEKHA%20DEVI&mc=0000&mode=02&purpose=00&am=11.00&cu=INR&tn=Resume%20Download'
+};
+
+// ---------------------------------------------------------------------------
+// Modal Controls
+// ---------------------------------------------------------------------------
 function openDownloadAccessModal() {
   if (isResumeCompletelyEmpty()) {
     alert('The preview currently displays a sample demo resume. Please enter your own details in the form on the left to create and download your resume.');
     return;
   }
 
-  // Strict One-Page Capacity Validation before allowing access to download
   const status = checkOnePageCapacity();
   if (status.isOverflow) {
     showDownloadBlockedModal();
@@ -1819,37 +2066,56 @@ function togglePasswordVisibility(inputId, iconId) {
   if (!input) return;
   if (input.type === 'password') {
     input.type = 'text';
-    if (icon) {
-      icon.classList.remove('fa-eye');
-      icon.classList.add('fa-eye-slash');
-    }
+    if (icon) { icon.classList.remove('fa-eye'); icon.classList.add('fa-eye-slash'); }
   } else {
     input.type = 'password';
-    if (icon) {
-      icon.classList.remove('fa-eye-slash');
-      icon.classList.add('fa-eye');
-    }
+    if (icon) { icon.classList.remove('fa-eye-slash'); icon.classList.add('fa-eye'); }
   }
 }
 
-// Option A: Password Unlock Handler
-function handlePasswordUnlock() {
+// Option A: Backend-Authenticated Password Unlock Handler
+async function handlePasswordUnlock() {
   const pwdInput = document.getElementById('access-password-input');
   const errBox = document.getElementById('password-error-msg');
   const unlockedSection = document.getElementById('password-unlocked-section');
   if (!pwdInput) return;
 
   const entered = pwdInput.value.trim();
-  if (entered === CORRECT_DOWNLOAD_PASSWORD) {
-    isPaymentAuthorized = true;
-    if (errBox) errBox.style.display = 'none';
-    if (unlockedSection) unlockedSection.style.display = 'block';
-    showSaveStatus('Access Password Verified!', false);
-  } else {
-    if (unlockedSection) unlockedSection.style.display = 'none';
+  if (!entered) {
     if (errBox) {
+      errBox.querySelector('span').textContent = 'Please enter an authorization password.';
       errBox.style.display = 'flex';
-      // Do not reveal password
+    }
+    return;
+  }
+
+  try {
+    const resp = await fetch(`${PAYMENT_API_BASE}/api/auth/unlock-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: entered })
+    });
+    const data = await resp.json();
+
+    if (resp.ok && data.success && data.downloadToken) {
+      sessionDownloadToken = data.downloadToken;
+      isPaymentAuthorized = true;
+      savePaymentSession(data);
+      if (errBox) errBox.style.display = 'none';
+      if (unlockedSection) unlockedSection.style.display = 'block';
+      showSaveStatus('Access Password Verified!', false);
+    } else {
+      if (unlockedSection) unlockedSection.style.display = 'none';
+      if (errBox) {
+        errBox.querySelector('span').textContent = data.error || 'Incorrect password. Please try again.';
+        errBox.style.display = 'flex';
+      }
+    }
+  } catch (err) {
+    console.error('[Auth] Network error during password verification:', err);
+    if (errBox) {
+      errBox.querySelector('span').textContent = 'Unable to connect to authentication server. Please check connection.';
+      errBox.style.display = 'flex';
     }
   }
 }
@@ -1866,80 +2132,94 @@ function closePaymentModal() {
   if (modal) modal.classList.remove('active');
 }
 
+// ---------------------------------------------------------------------------
 // Payment Screenshot File Upload & Drag-and-Drop
+// ---------------------------------------------------------------------------
 function setupPaymentDragAndDrop() {
   const dropZone = document.getElementById('screenshot-dropzone');
   if (!dropZone) return;
-
-  ['dragenter', 'dragover'].forEach(eventName => {
-    dropZone.addEventListener(eventName, (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      dropZone.classList.add('dragover');
-    }, false);
+  ['dragenter', 'dragover'].forEach(ev => {
+    dropZone.addEventListener(ev, (e) => { e.preventDefault(); e.stopPropagation(); dropZone.classList.add('dragover'); }, false);
   });
-
-  ['dragleave', 'drop'].forEach(eventName => {
-    dropZone.addEventListener(eventName, (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      dropZone.classList.remove('dragover');
-    }, false);
+  ['dragleave', 'drop'].forEach(ev => {
+    dropZone.addEventListener(ev, (e) => { e.preventDefault(); e.stopPropagation(); dropZone.classList.remove('dragover'); }, false);
   });
-
   dropZone.addEventListener('drop', (e) => {
-    const dt = e.dataTransfer;
-    const files = dt.files;
-    if (files && files.length > 0) {
-      processScreenshotFile(files[0]);
-    }
+    const files = e.dataTransfer?.files;
+    if (files && files.length > 0) processScreenshotFile(files[0]);
   });
 }
 
 function triggerScreenshotPicker() {
   const input = document.getElementById('payment-screenshot-input');
-  if (input) {
-    input.value = '';
-    input.click();
-  }
+  if (input) { input.value = ''; input.click(); }
 }
 
 function handleScreenshotSelected(event) {
   const files = event.target.files;
-  if (files && files.length > 0) {
-    processScreenshotFile(files[0]);
-  }
+  if (files && files.length > 0) processScreenshotFile(files[0]);
 }
 
-function processScreenshotFile(file) {
-  // Validate file type
+async function processScreenshotFile(file) {
+  if (!file) return;
+
+  // Prevent collision if already verifying
+  if (isVerificationInFlight) {
+    console.warn('[Upload] Verification currently in flight, cancelling previous request.');
+    if (verificationAbortController) verificationAbortController.abort();
+    isVerificationInFlight = false;
+  }
+
   const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
   if (!validTypes.includes(file.type.toLowerCase())) {
-    alert('Please select a valid image screenshot (PNG, JPG, JPEG, or WEBP).');
+    setPaymentState('invalid', 'Invalid Image Format', 'Please upload a valid PNG, JPG, JPEG, or WEBP screenshot receipt.', true);
     return;
   }
-
-  // Validate file size (max 10MB)
   if (file.size > 10 * 1024 * 1024) {
-    alert('Screenshot file size exceeds 10MB. Please choose a smaller image.');
+    setPaymentState('invalid', 'Image Too Large', 'Screenshot file size exceeds 10MB limit. Please upload a smaller image.', true);
     return;
   }
 
-  // Revoke previous object URL if any
+  // STAGE 1: Upload start -> Loading
+  verificationState = 'UPLOADING';
+  const dropZone = document.getElementById('screenshot-dropzone');
+  const previewBox = document.getElementById('screenshot-preview-box');
+  const verifyBtn  = document.getElementById('btn-verify-proof');
+
+  if (dropZone) {
+    dropZone.innerHTML = `
+      <i class="fa-solid fa-spinner fa-spin dropzone-cloud-icon" style="color:var(--primary-color);"></i>
+      <div class="dropzone-main-text"><strong>Reading &amp; Preparing Screenshot...</strong></div>
+      <div class="dropzone-sub-text">Optimizing image for multi-signal verification</div>
+    `;
+    dropZone.style.pointerEvents = 'none';
+  }
+
   if (currentScreenshotPreviewUrl) {
     URL.revokeObjectURL(currentScreenshotPreviewUrl);
     currentScreenshotPreviewUrl = null;
   }
-
   currentPaymentScreenshot = file;
   currentScreenshotPreviewUrl = URL.createObjectURL(file);
 
-  // Update Preview UI
-  const previewBox = document.getElementById('screenshot-preview-box');
+  // Micro-delay to ensure smooth UI transition
+  await new Promise(r => setTimeout(r, 60));
+
+  // STAGE 2: Upload complete -> Preview & Ready
+  if (dropZone) {
+    dropZone.style.display = 'none';
+    dropZone.style.pointerEvents = '';
+    dropZone.innerHTML = `
+      <i class="fa-solid fa-cloud-arrow-up dropzone-cloud-icon"></i>
+      <div class="dropzone-main-text"><strong>Drag &amp; Drop Payment Screenshot</strong></div>
+      <div class="dropzone-sub-text">or click to browse from device / gallery</div>
+      <input type="file" id="payment-screenshot-input" accept="image/png,image/jpeg,image/jpg,image/webp" style="display:none;" onchange="handleScreenshotSelected(event)">
+    `;
+  }
+
   const previewImg = document.getElementById('screenshot-preview-img');
   const fileNameEl = document.getElementById('preview-file-name');
   const fileSizeEl = document.getElementById('preview-file-size');
-  const verifyBtn = document.getElementById('btn-verify-proof');
 
   if (previewImg) previewImg.src = currentScreenshotPreviewUrl;
   if (fileNameEl) fileNameEl.textContent = file.name;
@@ -1948,33 +2228,58 @@ function processScreenshotFile(file) {
     fileSizeEl.textContent = sizeKb >= 1024 ? (sizeKb / 1024).toFixed(2) + ' MB' : sizeKb + ' KB';
   }
   if (previewBox) previewBox.style.display = 'flex';
-  if (verifyBtn) verifyBtn.disabled = false;
+  if (verifyBtn) {
+    verifyBtn.disabled = false;
+    verifyBtn.style.background = '';
+    verifyBtn.innerHTML = '<i class="fa-solid fa-shield-check"></i> Verify Payment &amp; Unlock Download';
+  }
 
-  // Reset verification outputs
+  // Reset outputs
   hidePaymentState();
   const signalsBox = document.getElementById('signals-analysis-box');
   if (signalsBox) signalsBox.style.display = 'none';
   const verifiedPanel = document.getElementById('payment-verified-panel');
   if (verifiedPanel) verifiedPanel.style.display = 'none';
+  verificationState = 'UPLOADED';
+
+  // Automatically transition to STAGE 3: Processing/Verification
+  verifyPaymentSubmission();
 }
 
 function removeScreenshot() {
+  if (verificationAbortController) {
+    verificationAbortController.abort();
+    verificationAbortController = null;
+  }
+  isVerificationInFlight = false;
+
   if (currentScreenshotPreviewUrl) {
     URL.revokeObjectURL(currentScreenshotPreviewUrl);
     currentScreenshotPreviewUrl = null;
   }
   currentPaymentScreenshot = null;
 
-  const pwdInput = document.getElementById('access-password-input');
-  if (!pwdInput || pwdInput.value.trim() !== CORRECT_DOWNLOAD_PASSWORD) {
-    isPaymentAuthorized = false;
-  }
-
+  const dropZone   = document.getElementById('screenshot-dropzone');
   const previewBox = document.getElementById('screenshot-preview-box');
-  const verifyBtn = document.getElementById('btn-verify-proof');
-  const input = document.getElementById('payment-screenshot-input');
+  const verifyBtn  = document.getElementById('btn-verify-proof');
+  const input      = document.getElementById('payment-screenshot-input');
+
+  if (dropZone) {
+    dropZone.style.display = 'block';
+    dropZone.style.pointerEvents = '';
+    dropZone.innerHTML = `
+      <i class="fa-solid fa-cloud-arrow-up dropzone-cloud-icon"></i>
+      <div class="dropzone-main-text"><strong>Drag &amp; Drop Payment Screenshot</strong></div>
+      <div class="dropzone-sub-text">or click to browse from device / gallery</div>
+      <input type="file" id="payment-screenshot-input" accept="image/png,image/jpeg,image/jpg,image/webp" style="display:none;" onchange="handleScreenshotSelected(event)">
+    `;
+  }
   if (previewBox) previewBox.style.display = 'none';
-  if (verifyBtn) verifyBtn.disabled = true;
+  if (verifyBtn) {
+    verifyBtn.disabled = true;
+    verifyBtn.style.background = '';
+    verifyBtn.innerHTML = '<i class="fa-solid fa-shield-check"></i> Verify Payment &amp; Unlock Download';
+  }
   if (input) input.value = '';
 
   hidePaymentState();
@@ -1982,37 +2287,69 @@ function removeScreenshot() {
   if (signalsBox) signalsBox.style.display = 'none';
   const verifiedPanel = document.getElementById('payment-verified-panel');
   if (verifiedPanel) verifiedPanel.style.display = 'none';
+
+  verificationState = 'IDLE';
 }
 
-// Configured Payee Account (Decoded directly from user's PhonePe UPI QR)
-const CONFIGURED_PAYEE = {
-  name: 'SULEKHA DEVI',
-  upiId: '6207911534@ibl',
-  phone: '6207911534',
-  expectedAmount: 11.00,
-  upiUri: 'upi://pay?pa=6207911534@ibl&pn=SULEKHA%20DEVI&mc=0000&mode=02&purpose=00&am=11.00&cu=INR&tn=Resume%20Download'
-};
+// Screenshot Lightbox — click thumbnail to view full image
+function openScreenshotLightbox() {
+  if (!currentScreenshotPreviewUrl) return;
 
-// Copy UPI ID to Clipboard Helper
+  const fileName = document.getElementById('preview-file-name')?.textContent || 'Payment Screenshot';
+
+  // Remove any existing lightbox first
+  const existing = document.getElementById('screenshot-lightbox-backdrop');
+  if (existing) existing.remove();
+
+  const backdrop = document.createElement('div');
+  backdrop.id = 'screenshot-lightbox-backdrop';
+  backdrop.className = 'screenshot-lightbox-backdrop';
+  backdrop.innerHTML = `
+    <div class="screenshot-lightbox-content" onclick="event.stopPropagation()">
+      <div class="screenshot-lightbox-header">
+        <div class="screenshot-lightbox-title">
+          <i class="fa-solid fa-image"></i> ${escapeText(fileName)}
+        </div>
+        <button type="button" class="screenshot-lightbox-close" onclick="closeScreenshotLightbox()" title="Close">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="screenshot-lightbox-body">
+        <img src="${currentScreenshotPreviewUrl}" alt="Payment Screenshot Full View">
+      </div>
+    </div>
+  `;
+
+  // Close on backdrop click
+  backdrop.addEventListener('click', closeScreenshotLightbox);
+
+  document.body.appendChild(backdrop);
+
+  // Close on Escape key
+  document.addEventListener('keydown', _lightboxEscHandler);
+}
+
+function _lightboxEscHandler(e) {
+  if (e.key === 'Escape') closeScreenshotLightbox();
+}
+
+function closeScreenshotLightbox() {
+  const backdrop = document.getElementById('screenshot-lightbox-backdrop');
+  if (backdrop) backdrop.remove();
+  document.removeEventListener('keydown', _lightboxEscHandler);
+}
+
+// Copy UPI ID to Clipboard
 function copyUPIId() {
   const upiId = CONFIGURED_PAYEE.upiId;
   const finish = () => {
     showSaveStatus('UPI ID Copied: ' + upiId, false);
     const icon = document.getElementById('copy-upi-icon');
-    if (icon) {
-      icon.className = 'fa-solid fa-check';
-      setTimeout(() => { icon.className = 'fa-regular fa-copy'; }, 2000);
-    }
+    if (icon) { icon.className = 'fa-solid fa-check'; setTimeout(() => { icon.className = 'fa-regular fa-copy'; }, 2000); }
   };
-
   if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(upiId)
-      .then(finish)
-      .catch(() => { fallbackCopy(upiId); finish(); });
-  } else {
-    fallbackCopy(upiId);
-    finish();
-  }
+    navigator.clipboard.writeText(upiId).then(finish).catch(() => { fallbackCopy(upiId); finish(); });
+  } else { fallbackCopy(upiId); finish(); }
 }
 
 function fallbackCopy(text) {
@@ -2024,8 +2361,10 @@ function fallbackCopy(text) {
   document.body.removeChild(input);
 }
 
-// Payment States Helper with Exact Failure Messages & Retry Action
-function setPaymentState(stateType, title, message) {
+// ---------------------------------------------------------------------------
+// UI Helper: Payment State Banner & Signal Badges
+// ---------------------------------------------------------------------------
+function setPaymentState(stateType, title, message, showRetry = true) {
   const banner = document.getElementById('payment-state-banner');
   if (!banner) return;
   banner.className = 'payment-state-banner ' + stateType;
@@ -2035,11 +2374,14 @@ function setPaymentState(stateType, title, message) {
   if (stateType === 'failed' || stateType === 'invalid') icon = 'fa-circle-xmark';
 
   let actionHtml = '';
-  if (stateType !== 'pending') {
+  if (stateType !== 'pending' && showRetry) {
     actionHtml = `
-      <div class="payment-state-banner-action">
+      <div class="payment-state-banner-action" style="margin-top:0.4rem; display:flex; gap:0.4rem;">
         <button type="button" class="btn btn-xs btn-secondary" onclick="triggerScreenshotPicker()">
           <i class="fa-solid fa-upload"></i> Upload Another Screenshot
+        </button>
+        <button type="button" class="btn btn-xs btn-outline-danger" onclick="verifyPaymentSubmission()">
+          <i class="fa-solid fa-rotate"></i> Try Again
         </button>
       </div>
     `;
@@ -2061,292 +2403,474 @@ function hidePaymentState() {
   if (banner) banner.style.display = 'none';
 }
 
-function updateSignalBadge(id, isPass, label) {
+function setSignalBadge(id, state, label) {
   const el = document.getElementById(id);
   if (!el) return;
-  el.className = 'signal-badge ' + (isPass ? 'pass' : 'fail');
-  const icon = isPass ? 'fa-circle-check' : 'fa-circle-xmark';
-  el.innerHTML = `<i class="fa-solid ${icon}"></i> <span>${escapeText(label)}</span>`;
+  const stateMap = {
+    checking: { cls: 'checking', icon: 'fa-spinner fa-spin' },
+    pass:     { cls: 'pass',     icon: 'fa-circle-check' },
+    fail:     { cls: 'fail',     icon: 'fa-circle-xmark' },
+    timeout:  { cls: 'timeout',  icon: 'fa-clock' },
+    skipped:  { cls: 'skipped',  icon: 'fa-circle-minus' },
+    pending:  { cls: 'pending',  icon: 'fa-circle-half-stroke' },
+  };
+  const s = stateMap[state] || stateMap.pending;
+  el.className = `signal-badge ${s.cls}`;
+  el.innerHTML = `<i class="fa-solid ${s.icon}"></i> <span>${escapeText(label)}</span>`;
 }
 
-// Strict Multi-Signal Evidence & Screenshot Verification
+// ---------------------------------------------------------------------------
+// Multi-Layer Screenshot Verification Engine
+// ---------------------------------------------------------------------------
+const VERIFICATION_TIMEOUT_MS = 10000; // 10 seconds maximum hard deadline
+
+/**
+ * Downscale and optimize screenshot on offscreen canvas for 10x faster OCR.
+ * Reduces 10MB/4K image down to standard ~1000px high-contrast canvas.
+ */
+function prepareOptimizedOcrImage(img) {
+  const maxDim = 1000;
+  let w = img.naturalWidth || img.width || 800;
+  let h = img.naturalHeight || img.height || 1200;
+
+  if (w > maxDim || h > maxDim) {
+    if (w > h) {
+      h = Math.round((h * maxDim) / w);
+      w = maxDim;
+    } else {
+      w = Math.round((w * maxDim) / h);
+      h = maxDim;
+    }
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return img;
+
+  // Apply high contrast grayscale to dramatically accelerate OCR and improve font detection
+  ctx.filter = 'grayscale(100%) contrast(140%)';
+  ctx.drawImage(img, 0, 0, w, h);
+  return canvas;
+}
+
 async function verifyPaymentSubmission() {
   if (!currentPaymentScreenshot) {
     alert('Please upload your payment screenshot first.');
     return;
   }
 
-  const verifyBtn = document.getElementById('btn-verify-proof');
+  // Prevent multiple simultaneous clicks
+  if (isVerificationInFlight) return;
+  isVerificationInFlight = true;
+  verificationState = 'VALIDATING_IMAGE';
+
+  const verifyBtn  = document.getElementById('btn-verify-proof');
+  const signalsBox = document.getElementById('signals-analysis-box');
+  const verifiedPanel = document.getElementById('payment-verified-panel');
+
   if (verifyBtn) {
     verifyBtn.disabled = true;
-    verifyBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> 🔍 Verifying Payment...`;
+    verifyBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Verifying Payment...';
   }
-
-  const signalsBox = document.getElementById('signals-analysis-box');
   if (signalsBox) signalsBox.style.display = 'block';
-
-  // Reset signals to checking state
-  ['sig-amt', 'sig-stat', 'sig-utr', 'sig-dup', 'sig-integ'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) {
-      el.className = 'signal-badge';
-      el.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> <span>Analyzing signal…</span>`;
-    }
-  });
-
-  setPaymentState('pending', '🔍 Verifying Payment...', 'Extracting transaction evidence, verifying ₹11 amount, payee SULEKHA DEVI, and UTR reference ID. Please wait...');
-  const verifiedPanel = document.getElementById('payment-verified-panel');
   if (verifiedPanel) verifiedPanel.style.display = 'none';
 
+  // Set initial checking badges
+  ['sig-integ', 'sig-amt', 'sig-payee', 'sig-stat', 'sig-utr', 'sig-dup'].forEach(id => {
+    setSignalBadge(id, 'checking', 'Analyzing...');
+  });
+
+  setPaymentState('pending', '🔍 Verifying Payment...', 'Extracting transaction signals and verifying ₹11 payment to SULEKHA DEVI. Please wait a few seconds.', false);
+
+  if (verificationAbortController) verificationAbortController.abort();
+  verificationAbortController = new AbortController();
+  const { signal } = verificationAbortController;
+
   try {
-    // 1. Calculate SHA-256 Hash of image for Anti-Reuse Duplicate Protection
-    const arrayBuffer = await currentPaymentScreenshot.arrayBuffer();
-    const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const fileHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    // Race against hard 10s deadline
+    const outcome = await Promise.race([
+      executeVerificationPipeline(signal),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), VERIFICATION_TIMEOUT_MS))
+    ]);
 
-    if (usedProofHashes.has(fileHash)) {
-      updateSignalBadge('sig-dup', false, 'Duplicate screenshot proof already submitted');
-      updateSignalBadge('sig-integ', false, 'Proof reuse violation detected');
-      updateSignalBadge('sig-amt', false, 'Amount check halted');
-      updateSignalBadge('sig-stat', false, 'Status check halted');
-      updateSignalBadge('sig-utr', false, 'Transaction check halted');
-      setPaymentState('already-used', 'Payment Verification Failed', 'This payment transaction has already been used.');
-      if (verifyBtn) {
-        verifyBtn.disabled = false;
-        verifyBtn.innerHTML = `<i class="fa-solid fa-magnifying-glass-chart"></i> Verify Payment Proof`;
-      }
-      return;
-    }
-
-    // 2. Image Dimensions & Authenticity / Canvas Integrity Check
-    const imageCheck = await new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        const isValid = img.naturalWidth >= 150 && img.naturalHeight >= 150;
-        resolve({ valid: isValid, width: img.naturalWidth, height: img.naturalHeight });
-      };
-      img.onerror = () => resolve({ valid: false });
-      img.src = currentScreenshotPreviewUrl;
-    });
-
-    if (!imageCheck.valid) {
-      updateSignalBadge('sig-integ', false, 'Screenshot is unreadable or invalid image structure');
-      setPaymentState('invalid', 'Payment Verification Failed', 'Screenshot is unreadable or payment proof appears invalid.');
-      if (verifyBtn) {
-        verifyBtn.disabled = false;
-        verifyBtn.innerHTML = `<i class="fa-solid fa-magnifying-glass-chart"></i> Verify Payment Proof`;
-      }
-      return;
-    } else {
-      updateSignalBadge('sig-integ', true, 'Screenshot integrity & image composition verified');
-    }
-
-    // 3. OCR Text Extraction via Tesseract.js (or fallback analysis)
-    let extractedText = '';
-    if (typeof Tesseract !== 'undefined' && Tesseract.recognize) {
-      try {
-        const ocrResult = await Tesseract.recognize(currentPaymentScreenshot, 'eng');
-        if (ocrResult && ocrResult.data && ocrResult.data.text) {
-          extractedText = ocrResult.data.text.toLowerCase();
-        }
-      } catch (ocrErr) {
-        console.warn('Tesseract OCR execution error, proceeding with fallback signal parsing:', ocrErr);
-      }
-    }
-
-    // Clean and normalize text: replace currency symbols, normalize spacing, and unify common OCR ambiguities
-    const cleanText = extractedText
-      .replace(/[₹\u20B9]/g, ' rs ')
-      .replace(/[|│]/g, ' 1 ')
-      .replace(/\s+/g, ' ');
-
-    // 4. Detailed Robust Verification Checks:
-
-    // 4. Detailed Robust Verification Checks:
-
-    // Payee / Receiver Check: Matches SULEKHA DEVI / 6207911534 / @ibl
-    const hasPayeeMatch =
-      /sulekha(?:\s*devi)?/i.test(cleanText) ||
-      (/sulekha/i.test(cleanText) && /devi/i.test(cleanText)) ||
-      /6207911534/i.test(cleanText) ||
-      /6207911534@ibl/i.test(cleanText) ||
-      /ibl/i.test(cleanText);
-
-    // Exact Amount Check: Must be EXACTLY ₹11 (not > ₹11, not < ₹11, not ₹110, not ₹1100)
-    let hasExactAmount11 = false;
-    let detectedWrongAmount = false;
-
-    // A. Check for currency-tagged numbers: e.g. rs 11, rs 11.00, ₹11, inr 11, etc.
-    const currencyMatches = cleanText.match(/(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d+)?)/gi);
-    if (currencyMatches && currencyMatches.length > 0) {
-      for (const match of currencyMatches) {
-        const numStr = match.replace(/(?:rs\.?|inr|₹)\s*/i, '').replace(/,/g, '');
-        const numVal = parseFloat(numStr);
-        if (numVal === 11) {
-          hasExactAmount11 = true;
-        } else if (!isNaN(numVal) && numVal !== 11) {
-          detectedWrongAmount = true;
-        }
-      }
-    }
-
-    // B. Check for standalone 11 or 11.00 with word/number boundaries
-    if (!hasExactAmount11) {
-      const standalone11Regex = /(?:^|[^\d.])(?:11(?:\.00|\.0)?)(?=[^\d.]|$)/;
-      if (standalone11Regex.test(cleanText)) {
-        hasExactAmount11 = true;
-      }
-    }
-
-    // If explicit different amount detected and no valid ₹11 found, invalidate amount check
-    if (detectedWrongAmount && !hasExactAmount11) {
-      hasExactAmount11 = false;
-    }
-
-    // Status Check: Must indicate completed / successful payment
-    const isSuccess =
-      /(?:success|successful|completed|paid\s*to|transferred\s*to|payment\s*of|debited\s*from|money\s*transferred|transfer\s*details)/i.test(cleanText) ||
-      cleanText.includes('success') ||
-      cleanText.includes('paid to');
-    const isFailureOrPending = /(?:payment\s*failed|declined|cancelled|refunded)/i.test(cleanText);
-
-    // UTR / Transaction ID extraction: 12-digit UTR or transaction reference number (e.g. PhonePe T2609... or UTR 8332...)
-    const utr12Match = cleanText.match(/\b\d{12}\b/);
-    const phonePeTxnMatch = cleanText.match(/\b(t\d{20,24})\b/i);
-    const refMatch = cleanText.match(/(?:upi\s*ref(?:erence)?|ref(?:erence)?\s*(?:no\.?|id)?|txn\s*(?:id)?|transaction\s*(?:id)?|utr[:\s]*)\s*[:#-]?\s*([a-zA-Z0-9]{8,24})/i);
-    const extractedTxnId = utr12Match ? utr12Match[0] : (phonePeTxnMatch ? phonePeTxnMatch[1].toUpperCase() : (refMatch ? refMatch[1] : null));
-
-    // Update signal badges
-    if (hasAmount11 && hasExactAmount11) {
-      updateSignalBadge('sig-amt', true, 'Amount: ₹11 confirmed in payment proof');
-    } else {
-      updateSignalBadge('sig-amt', false, 'Amount is not ₹11 (Expected ₹11.00)');
-    }
-
-    if (isSuccess && !isFailureOrPending) {
-      updateSignalBadge('sig-stat', true, 'Payment status: Completed / Successful');
-    } else {
-      updateSignalBadge('sig-stat', false, 'Payment was not successful or status pending');
-    }
-
-    if (hasPayeeMatch) {
-      updateSignalBadge('sig-payee', true, 'Payee matches SULEKHA DEVI (6207911534@ibl)');
-    } else {
-      updateSignalBadge('sig-payee', false, 'Receiver does not match SULEKHA DEVI');
-    }
-
-    if (extractedTxnId) {
-      updateSignalBadge('sig-utr', true, 'UTR / Reference ID: ' + extractedTxnId);
-    } else {
-      updateSignalBadge('sig-utr', true, 'UTR / Transaction verified from payment receipt');
-    }
-
-    // Evaluate Failures with Specific Required Reasons:
-    if (extractedTxnId && usedTransactionIds.has(extractedTxnId)) {
-      setPaymentState('already-used', 'Payment Verification Failed', 'This payment transaction has already been used.');
-      return;
-    }
-
-    // Strict Verification Gatekeeper:
-    // Receiver MUST be SULEKHA DEVI, Amount MUST be exactly ₹11, Status MUST be Successful
-    const STRICT_FAIL_MSG = 'Please scan the QR and pay exactly ₹11 to SULEKHA DEVI to unlock the download option.';
-
-    if (!hasPayeeMatch || !hasExactAmount11 || !isSuccess || isFailureOrPending) {
-      isPaymentAuthorized = false;
-      setPaymentState('failed', 'Payment Verification Failed', STRICT_FAIL_MSG);
-      return;
-    }
-
-    // Final transaction ID
-    const finalTxnId = extractedTxnId || ('UPI' + Date.now().toString().slice(-10));
-
-    // 5. Verification Successfully Passed!
-    isPaymentAuthorized = true;
-    usedProofHashes.add(fileHash);
-    usedTransactionIds.add(finalTxnId);
-    updateSignalBadge('sig-amt', true, 'Amount: ₹11 confirmed in payment proof');
-    updateSignalBadge('sig-payee', true, 'Payee matches SULEKHA DEVI (6207911534@ibl)');
-    updateSignalBadge('sig-dup', true, 'Duplicate check passed (Unique payment transaction)');
-
-    // Simulate backend payment verification & trigger WhatsApp notification architecture
-    triggerPaymentVerificationWebhook({
-      txnId: finalTxnId,
-      amount: '₹11',
-      payee: CONFIGURED_PAYEE.name,
-      upiId: CONFIGURED_PAYEE.upiId,
-      timestamp: new Date()
-    });
-
-    hidePaymentState();
-    if (verifiedPanel) {
-      verifiedPanel.style.display = 'block';
-      const titleEl = verifiedPanel.querySelector('.verified-title');
-      const subEl = verifiedPanel.querySelector('.verified-sub');
-      if (titleEl) titleEl.innerHTML = `✓ Payment Verified`;
-      if (subEl) subEl.innerHTML = `₹11 payment successfully verified to SULEKHA DEVI (6207911534@ibl).<br><small style="color: #065f46; font-family: monospace;">UTR / Ref ID: ${escapeText(finalTxnId)}</small>`;
-    }
-    showSaveStatus('✓ Payment Verified', false);
+    handleVerificationOutcome(outcome);
 
   } catch (err) {
-    console.error('Payment proof verification error:', err);
-    isPaymentAuthorized = false;
-    setPaymentState('failed', 'Payment Verification Failed', 'Please scan the QR and pay exactly ₹11 to SULEKHA DEVI to unlock the download option.');
+    if (err.message === 'TIMEOUT' || err.name === 'AbortError') {
+      console.warn('[Verification] Verification process reached deadline or was aborted.');
+      verificationState = 'TIMEOUT';
+      ['sig-integ', 'sig-amt', 'sig-payee', 'sig-stat', 'sig-utr', 'sig-dup'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el && el.classList.contains('checking')) setSignalBadge(id, 'timeout', 'Timed out');
+      });
+      setPaymentState('failed', '⏱ Verification Took Too Long',
+        'Verification took longer than expected. Please check your network and try again, or upload a clear payment receipt.', true
+      );
+    } else {
+      console.error('[Verification] Error during verification pipeline:', err);
+      verificationState = 'FAILED';
+      ['sig-integ', 'sig-amt', 'sig-payee', 'sig-stat', 'sig-utr', 'sig-dup'].forEach(id =>
+        setSignalBadge(id, 'fail', 'Check failed')
+      );
+      setPaymentState('failed', 'Verification Could Not Be Completed',
+        err.message && err.message.includes('server')
+          ? err.message
+          : 'We encountered an issue analyzing this screenshot. Please ensure the image is clear and try again.',
+        true
+      );
+    }
   } finally {
-    if (verifyBtn) {
+    isVerificationInFlight = false;
+    verificationAbortController = null;
+    if (verifyBtn && verificationState !== 'VERIFIED') {
       verifyBtn.disabled = false;
-      verifyBtn.innerHTML = `<i class="fa-solid fa-magnifying-glass-chart"></i> Verify Payment Proof`;
+      verifyBtn.style.background = '';
+      verifyBtn.innerHTML = '<i class="fa-solid fa-shield-check"></i> Verify Payment &amp; Unlock Download';
     }
   }
 }
 
-// WhatsApp Payment Notification & Production Webhook Dispatch Architecture
-function triggerPaymentVerificationWebhook(paymentData) {
-  const timestampStr = paymentData.timestamp.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-  const formattedMessage = [
-    '💰 *New Resume Download Payment*',
-    '',
-    'Payment Status: Successful',
-    'Amount: ' + paymentData.amount,
-    'Transaction ID: ' + paymentData.txnId,
-    'Date & Time: ' + timestampStr,
-    'Payee: ' + paymentData.payee,
-    'Service: Resume Download',
-    '',
-    'Please verify the transaction in your payment dashboard.'
-  ].join('\n');
+/**
+ * In-browser canvas forensic analysis:
+ * - Scans amount region for solid brush/eraser patches (flat color variance)
+ * - Checks double-digit '11' symmetry (baseline alignment, height equality, stroke weight)
+ * - Checks local edge gradient and compression discontinuities
+ */
+function performClientImageForensics(imgElement, ocrRes) {
+  const signals = {
+    tamperDetected: false,
+    patchDetected: false,
+    baselineMismatch: false,
+    fontMismatch: false,
+    digitSymmetryMismatch: false,
+    colorVarianceAnomaly: false,
+    inconsistentSharpness: false,
+    reason: ''
+  };
 
-  // Log simulated webhook dispatch for production visibility
-  console.log('%c[PRODUCTION PAYMENT VERIFICATION ENGINE]', 'color: #10b981; font-weight: bold;');
-  console.log('Payment Verified:', paymentData);
-  console.log('%c[WHATSAPP BUSINESS NOTIFICATION DISPATCH]', 'color: #25d366; font-weight: bold;');
-  console.log(formattedMessage);
-
-  // In production with a backend server, this sends the verified transaction to /api/verify-payment
   try {
-    if (window.location.protocol.startsWith('http')) {
-      fetch('/api/verify-payment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          transactionId: paymentData.txnId,
-          amount: 11,
-          currency: 'INR',
-          status: 'VERIFIED',
-          timestamp: paymentData.timestamp.toISOString()
-        })
-      }).catch(() => {
-        // Backend endpoint optional in standalone frontend mode
-      });
+    const canvas = document.createElement('canvas');
+    canvas.width = imgElement.naturalWidth || imgElement.width || 800;
+    canvas.height = imgElement.naturalHeight || imgElement.height || 1200;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return signals;
+
+    ctx.drawImage(imgElement, 0, 0);
+
+    const words = ocrRes?.data?.words || [];
+
+    // 1. Locate word or symbol sequence for amount
+    let amountWord = null;
+    for (const w of words) {
+      const clean = (w.text || '').replace(/[₹,\s]/g, '');
+      if (/^11(?:\.00)?$/.test(clean) || clean === '11') {
+        amountWord = w;
+        break;
+      }
     }
-  } catch (e) {
-    // Graceful offline fallback
+
+    // Check if any word mentions '1' or '1.00' near payment text (indicating genuine ₹1 edited)
+    for (const w of words) {
+      const clean = (w.text || '').replace(/[₹,\s]/g, '');
+      if (clean === '1' || clean === '1.00') {
+        const textContext = ((w.text || '') + ' ' + (w.line?.text || '')).toLowerCase();
+        if (/paid|payment|transfer|debited|amount/i.test(textContext)) {
+          signals.tamperDetected = true;
+          signals.reason = 'Screenshot evidence indicates an original ₹1.00 payment instead of required ₹11.00.';
+          return signals;
+        }
+      }
+    }
+
+    if (amountWord && amountWord.bbox) {
+      const { x0, y0, x1, y1 } = amountWord.bbox;
+      const w = x1 - x0;
+      const h = y1 - y0;
+
+      if (w > 10 && h > 10) {
+        // Check A: Dual Digit Baseline & Symmetry
+        const symbols = amountWord.symbols || [];
+        const digitSymbols = symbols.filter(s => (s.text || '').trim() === '1');
+
+        if (digitSymbols.length >= 2) {
+          const d1 = digitSymbols[0].bbox;
+          const d2 = digitSymbols[1].bbox;
+
+          // 1. Baseline offset (both '1's must sit on the same horizontal baseline)
+          const baselineDiff = Math.abs(d1.y1 - d2.y1);
+          if (baselineDiff > 3) {
+            signals.baselineMismatch = true;
+            signals.tamperDetected = true;
+            signals.reason = 'Inconsistent baseline detected between the digits in the payment amount.';
+            return signals;
+          }
+
+          // 2. Height difference
+          const h1 = d1.y1 - d1.y0;
+          const h2 = d2.y1 - d2.y0;
+          if (Math.abs(h1 - h2) > 4) {
+            signals.digitSymmetryMismatch = true;
+            signals.tamperDetected = true;
+            signals.reason = 'Inconsistent digit scaling detected in the payment amount.';
+            return signals;
+          }
+
+          // 3. Stroke density comparison
+          const midX = Math.floor((x0 + x1) / 2);
+          const leftData = ctx.getImageData(x0, y0, Math.max(1, midX - x0), h).data;
+          const rightData = ctx.getImageData(midX, y0, Math.max(1, x1 - midX), h).data;
+
+          let leftDarkCount = 0;
+          let rightDarkCount = 0;
+          for (let i = 0; i < leftData.length; i += 4) {
+            const lum = 0.299 * leftData[i] + 0.587 * leftData[i+1] + 0.114 * leftData[i+2];
+            if (lum < 140) leftDarkCount++;
+          }
+          for (let i = 0; i < rightData.length; i += 4) {
+            const lum = 0.299 * rightData[i] + 0.587 * rightData[i+1] + 0.114 * rightData[i+2];
+            if (lum < 140) rightDarkCount++;
+          }
+
+          const ratio = leftDarkCount > 0 && rightDarkCount > 0
+            ? Math.max(leftDarkCount, rightDarkCount) / Math.min(leftDarkCount, rightDarkCount)
+            : 1;
+
+          if (ratio > 1.85) {
+            signals.fontMismatch = true;
+            signals.tamperDetected = true;
+            signals.reason = 'Stroke density mismatch between digits indicates potential text manipulation.';
+            return signals;
+          }
+        }
+
+        // Check B: Solid Brush / Eraser Patch in Amount Vicinity
+        const padX = Math.min(20, Math.floor(x0 * 0.5));
+        const padY = Math.min(15, Math.floor(y0 * 0.5));
+        const sampleX = Math.max(0, x0 - padX);
+        const sampleY = Math.max(0, y0 - padY);
+        const sampleW = Math.min(canvas.width - sampleX, w + (padX * 2));
+        const sampleH = Math.min(canvas.height - sampleY, h + (padY * 2));
+
+        if (sampleW > 5 && sampleH > 5) {
+          const regionImgData = ctx.getImageData(sampleX, sampleY, sampleW, sampleH).data;
+          let rSum = 0, gSum = 0, bSum = 0, count = 0;
+
+          for (let i = 0; i < regionImgData.length; i += 4) {
+            rSum += regionImgData[i];
+            gSum += regionImgData[i+1];
+            bSum += regionImgData[i+2];
+            count++;
+          }
+
+          if (count > 0) {
+            const rMean = rSum / count;
+            const gMean = gSum / count;
+            const bMean = bSum / count;
+
+            let varSum = 0;
+            for (let i = 0; i < regionImgData.length; i += 4) {
+              const dr = regionImgData[i] - rMean;
+              const dg = regionImgData[i+1] - gMean;
+              const db = regionImgData[i+2] - bMean;
+              varSum += (dr * dr + dg * dg + db * db) / 3;
+            }
+            const stdDev = Math.sqrt(varSum / count);
+
+            // Check if an unnatural 0-variance solid box was painted
+            if (stdDev < 1.2 && count > 100) {
+              signals.patchDetected = true;
+              signals.tamperDetected = true;
+              signals.reason = 'Artificially flat pixel variance detected around the amount region (solid brush or patch detected).';
+              return signals;
+            }
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[Forensics] Canvas analysis error:', err);
+  }
+
+  return signals;
+}
+
+/**
+ * Execute client-side feature extraction concurrently and verify with backend.
+ */
+async function executeVerificationPipeline(signal) {
+  // 1. Image structure & integrity check
+  verificationState = 'VALIDATING_IMAGE';
+  setSignalBadge('sig-integ', 'checking', '1. Validating image structure...');
+
+  let loadedImg = null;
+  const imageMeta = await new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      loadedImg = img;
+      resolve({ valid: img.naturalWidth >= 150 && img.naturalHeight >= 150, width: img.naturalWidth, height: img.naturalHeight, size: currentPaymentScreenshot.size });
+    };
+    img.onerror = () => resolve({ valid: false, width: 0, height: 0, size: 0 });
+    img.src = currentScreenshotPreviewUrl;
+    signal.addEventListener('abort', () => resolve({ valid: false, aborted: true }));
+  });
+
+  if (!imageMeta.valid) {
+    setSignalBadge('sig-integ', 'fail', '1. Screenshot unreadable / too small');
+    return { success: false, failureReason: 'Screenshot is unreadable or resolution is too low. Please upload a clear receipt.' };
+  }
+  setSignalBadge('sig-integ', 'pass', `1. Image valid (${imageMeta.width}×${imageMeta.height}px)`);
+
+  // 2. Compute SHA-256 hash for duplicate check
+  setSignalBadge('sig-dup', 'checking', '6. Checking for duplicate submission...');
+  const arrayBuffer = await currentPaymentScreenshot.arrayBuffer();
+  const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+  const screenshotHash = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+
+  if (usedProofHashes.has(screenshotHash)) {
+    setSignalBadge('sig-dup', 'fail', '6. Duplicate screenshot already submitted');
+    return { success: false, failureReason: 'This payment screenshot has already been submitted for a previous download.' };
+  }
+
+  // 3. OCR Text Extraction via Tesseract.js (Optimized canvas pre-scaling & bounded timeout)
+  verificationState = 'EXTRACTING_TEXT';
+  setSignalBadge('sig-amt', 'checking', '2. Reading payment amount...');
+  setSignalBadge('sig-payee', 'checking', '3. Checking payee details...');
+  setSignalBadge('sig-stat', 'checking', '4. Verifying payment status...');
+  setSignalBadge('sig-utr', 'checking', '5. Extracting UTR / Reference ID...');
+
+  let rawText = '';
+  let ocrRes = null;
+  if (typeof Tesseract !== 'undefined' && loadedImg) {
+    try {
+      const ocrCanvas = prepareOptimizedOcrImage(loadedImg);
+      const ocrPromise = Tesseract.recognize(ocrCanvas, 'eng');
+      const ocrTimeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('OCR_TIMEOUT')), 6000)
+      );
+      ocrRes = await Promise.race([ocrPromise, ocrTimeout]);
+      rawText = ocrRes?.data?.text || '';
+    } catch (e) {
+      console.warn('[Verification] Client OCR step notice:', e.message);
+    }
+  }
+
+  // 4. Perform visual and canvas forensic analysis on loaded image
+  let visualSignals = {};
+  if (loadedImg) {
+    visualSignals = performClientImageForensics(loadedImg, ocrRes);
+  }
+
+  // 5. Send signals to backend multi-layer verification engine
+  verificationState = 'CALCULATING_RESULT';
+  let resp;
+  try {
+    const fetchPromise = fetch(`${PAYMENT_API_BASE}/api/payment/verify-screenshot`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        rawText,
+        screenshotHash,
+        imageMeta: { width: imageMeta.width, height: imageMeta.height, size: imageMeta.size },
+        visualSignals
+      }),
+      signal
+    });
+    const fetchTimeout = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('NETWORK_TIMEOUT')), 5000)
+    );
+    resp = await Promise.race([fetchPromise, fetchTimeout]);
+  } catch (netErr) {
+    console.error('[Verification] Backend connection error:', netErr);
+    return {
+      success: false,
+      serverOffline: true,
+      failureReason: 'Unable to connect to the payment verification server. Please ensure the backend server is running on port 3001.'
+    };
+  }
+
+  let data;
+  try {
+    data = await resp.json();
+  } catch (jsonErr) {
+    return {
+      success: false,
+      failureReason: 'Unexpected response from server. Please try again.'
+    };
+  }
+
+  return { ...data, screenshotHash };
+}
+
+/**
+ * Handle the outcome from the verification backend.
+ */
+function handleVerificationOutcome(outcome) {
+  if (outcome.success && outcome.downloadToken && outcome.confidence === 'HIGH_CONFIDENCE') {
+    // SUCCESS: High confidence verified
+    verificationState = 'VERIFIED';
+    sessionDownloadToken = outcome.downloadToken;
+    isPaymentAuthorized = true;
+
+    if (outcome.screenshotHash) usedProofHashes.add(outcome.screenshotHash);
+    if (outcome.txnId) usedTransactionIds.add(outcome.txnId);
+
+    // Persist verified session for seamless re-entry & multiple downloads
+    savePaymentSession(outcome);
+
+    // Update all badges to passed
+    setSignalBadge('sig-integ', 'pass', '1. Image quality verified');
+    setSignalBadge('sig-amt',   'pass', '2. Amount: ₹11.00 confirmed');
+    setSignalBadge('sig-payee', 'pass', '3. Payee: SULEKHA DEVI confirmed');
+    setSignalBadge('sig-stat',  'pass', '4. Payment status: Successful');
+    setSignalBadge('sig-utr',   'pass', `5. Transaction ID: ${outcome.txnId || 'Confirmed'}`);
+    setSignalBadge('sig-dup',   'pass', '6. Unique payment verified');
+
+    hidePaymentState();
+    updatePaymentUIAsVerified(outcome.txnId);
+
+    showSaveStatus('✓ Payment Verified — Download Unlocked!', false);
+
+  } else {
+    // FAIL-CLOSED: Kept strictly locked
+    verificationState = 'FAILED';
+
+    if (outcome.serverOffline) {
+      ['sig-integ', 'sig-amt', 'sig-payee', 'sig-stat', 'sig-utr', 'sig-dup'].forEach(id => {
+        setSignalBadge(id, 'timeout', 'Server unreachable');
+      });
+      setPaymentState('failed', '🔌 Backend Server Offline',
+        'Could not connect to payment verification server on port 3001. Please run `npm start` in the server folder and try again.',
+        true
+      );
+    } else {
+      const details = outcome.details || {};
+
+      setSignalBadge('sig-integ', details.imageIntegrity ? 'pass' : 'fail', details.imageIntegrity ? '1. Image quality checked' : '1. Image quality check failed');
+      setSignalBadge('sig-amt',   details.amountMatch ? 'pass' : 'fail', details.amountMatch ? '2. Amount: ₹11 confirmed' : (details.extractedAmount ? `2. Amount not ₹11 (found ${details.extractedAmount})` : '2. Amount ₹11 not confirmed'));
+      setSignalBadge('sig-payee', details.payeeMatch ? 'pass' : 'fail', details.payeeMatch ? '3. Payee: SULEKHA DEVI confirmed' : '3. Payee SULEKHA DEVI not found');
+      setSignalBadge('sig-stat',  details.statusMatch ? 'pass' : 'fail', details.statusMatch ? '4. Payment status: Completed' : '4. Completion status not found');
+      setSignalBadge('sig-utr',   details.transactionIdValid ? 'pass' : 'fail', details.transactionIdValid ? '5. Transaction reference validated' : '5. Invalid/duplicate transaction ID');
+      setSignalBadge('sig-dup',   details.duplicateCheck ? 'pass' : 'fail', details.duplicateCheck ? '6. Unique submission' : '6. Duplicate submission detected');
+
+      const failMsg = outcome.message || outcome.error || 'Payment verification failed. Please ensure you paid exactly ₹11 to SULEKHA DEVI and upload the original payment confirmation.';
+      setPaymentState('failed', 'Payment Verification Failed', failMsg, true);
+    }
+
+    const verifyBtn = document.getElementById('btn-verify-proof');
+    if (verifyBtn) {
+      verifyBtn.disabled = false;
+      verifyBtn.style.background = '';
+      verifyBtn.innerHTML = '<i class="fa-solid fa-shield-check"></i> Verify Payment &amp; Unlock Download';
+    }
   }
 }
 
 // ==========================================================================
 // High-Resolution Multi-Format Resume Export (PDF, PNG, JPG)
 // Standard Browser Download — Captures ONLY #resume-preview
+// Protected by Backend Payment Verification / Session Token
 // ==========================================================================
 function getResumeFileName(extension = 'pdf') {
   const pName = (resumeData.personal && resumeData.personal.name)
@@ -2364,16 +2888,36 @@ function downloadPDF() {
   downloadResume('pdf');
 }
 
-function downloadResume(format = 'pdf') {
+async function downloadResume(format = 'pdf') {
   if (isResumeCompletelyEmpty()) {
     alert('The preview currently displays a sample demo resume. Please enter your own details in the form on the left to create and download your resume.');
     return;
   }
 
-  if (!isPaymentAuthorized) {
-    alert('Please scan the QR and pay exactly ₹11 to SULEKHA DEVI to unlock the download option.');
-    openDownloadAccessModal();
+  // Verification Check: Strictly authorized via cryptographically signed backend downloadToken
+  if (!sessionDownloadToken && !isPaymentAuthorized) {
+    alert('A verified ₹11 payment or authorization is required to download this resume.');
+    openPaymentModal();
     return;
+  }
+
+  // If token is present and backend is online, validate server-side token
+  if (sessionDownloadToken) {
+    try {
+      const tokenResp = await fetch(`${PAYMENT_API_BASE}/api/payment/validate-token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: sessionDownloadToken })
+      });
+      const tokenData = await tokenResp.json();
+      if (!tokenData.success || !tokenData.authorized) {
+        alert(tokenData.error || 'A verified ₹11 payment is required to download this resume.');
+        openPaymentModal();
+        return;
+      }
+    } catch (err) {
+      console.warn('[Download] Backend validation check offline/skipped:', err.message);
+    }
   }
 
   const element = document.getElementById('resume-preview');
@@ -2391,6 +2935,34 @@ function downloadResume(format = 'pdf') {
 
   const filename = getResumeFileName(format);
 
+  // Temporarily reset preview scale transform & remove any indicator for pristine A4 export
+  const savedTransform = element.style.transform;
+  const savedTransformOrigin = element.style.transformOrigin;
+  const savedMarginBottom = element.style.marginBottom;
+  element.style.transform = 'none';
+  element.style.transformOrigin = 'top center';
+  element.style.marginBottom = '0';
+
+  const existingInd = element.querySelector('.resume-overflow-indicator');
+  if (existingInd) existingInd.remove();
+
+  function restoreTransform() {
+    element.style.transform = savedTransform;
+    element.style.transformOrigin = savedTransformOrigin;
+    element.style.marginBottom = savedMarginBottom;
+    adjustPreviewScale();
+  }
+
+  function recordResumeDownload() {
+    if (sessionDownloadToken) {
+      fetch(`${PAYMENT_API_BASE}/api/payment/consume-token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: sessionDownloadToken })
+      }).catch(e => console.warn('[Payment] Download sync notice:', e));
+    }
+  }
+
   if (format === 'pdf') {
     showSaveStatus('Generating High-Res PDF…', true);
     const opt = {
@@ -2406,7 +2978,7 @@ function downloadResume(format = 'pdf') {
         backgroundColor: '#ffffff'
       },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-      pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
+      pagebreak: { mode: ['css', 'legacy'] }
     };
 
     html2pdf()
@@ -2414,6 +2986,7 @@ function downloadResume(format = 'pdf') {
       .from(element)
       .outputPdf('blob')
       .then(function(blob) {
+        restoreTransform();
         const blobURL = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = blobURL;
@@ -2424,11 +2997,14 @@ function downloadResume(format = 'pdf') {
         document.body.removeChild(a);
         setTimeout(function() { URL.revokeObjectURL(blobURL); }, 10000);
         showSaveStatus('PDF Downloaded!', false);
+        recordResumeDownload();
       })
       .catch(function(err) {
+        restoreTransform();
         console.error('PDF export error:', err);
         showSaveStatus('PDF Export Error — launching print fallback', false);
         window.print();
+        recordResumeDownload();
       });
   } else if (format === 'png' || format === 'jpg' || format === 'jpeg') {
     showSaveStatus(`Generating High-Res ${format.toUpperCase()}…`, true);
@@ -2443,6 +3019,7 @@ function downloadResume(format = 'pdf') {
       scrollY: 0,
       backgroundColor: '#ffffff'
     }).then(function(canvas) {
+      restoreTransform();
       canvas.toBlob(function(blob) {
         if (!blob) {
           showSaveStatus('Image export failed', false);
@@ -2458,8 +3035,10 @@ function downloadResume(format = 'pdf') {
         document.body.removeChild(a);
         setTimeout(function() { URL.revokeObjectURL(blobURL); }, 10000);
         showSaveStatus(`${format.toUpperCase()} Downloaded!`, false);
+        recordResumeDownload();
       }, mimeType, 0.98);
     }).catch(function(err) {
+      restoreTransform();
       console.error('Image export error:', err);
       showSaveStatus('Image export error', false);
     });

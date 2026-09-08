@@ -1,0 +1,24 @@
+{
+  "name": "resume-builder-payment-server",
+  "version": "1.0.0",
+  "description": "Multi-Layer Screenshot Payment Verification & Download Gatekeeper Backend for Resume Builder",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js",
+    "test": "node test-verification.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.4.0",
+    "helmet": "^8.3.0"
+  },
+  "overrides": {
+    "qs": "^6.14.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
